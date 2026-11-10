@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<script>
+/* GitHub Pages 版：Google Apps Script の google.script.run を、本番の入り口（doPost）への問い合わせに置きかえる */
+(function(){
+  if (window.google && window.google.script) return;
+  var API = 'https://script.google.com/macros/s/AKfycbxhmF1yyM1WHMoPxTpy0WwhAjRyihEg6ayEUox88uUahafqHRHBz99_Q8pPKOdjYmiD/exec';
+  function call(fn, args, ok, ng){
+    fetch(API, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify({api:fn, args:args})})
+      .then(function(r){ return r.json(); })
+      .then(function(j){ if (j && j.ok) { if (ok) ok(j.result); } else { var e = new Error((j && j.error) || '失敗しました'); if (ng) ng(e); else console.error(e); } })
+      .catch(function(e){ if (ng) ng(e); else console.error(e); });
+  }
+  function runner(ok, ng){
+    return new Proxy({}, {get:function(t, p){
+      if (p === 'withSuccessHandler') return function(f){ return runner(f, ng); };
+      if (p === 'withFailureHandler') return function(f){ return runner(ok, f); };
+      return function(){ call(p, Array.prototype.slice.call(arguments), ok, ng); };
+    }});
+  }
+  window.google = {script:{
+    run: runner(null, null),
+    url: {getLocation:function(cb){ var o = {}; new URLSearchParams(location.search).forEach(function(v,k){ o[k] = v; }); cb({parameter:o}); }}
+  }};
+})();
+</script>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>新規取引申請 確認・承認</title>
+<style>
+  :root{--bg:#f4f5f2;--card:#fff;--ink:#1d2320;--sub:#66706b;--line:#d9ddd8;--acc:#1f6b4f;--acc2:#e7f2ec;--warn:#b3401f;--wait:#a36a00}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,"Hiragino Sans","Yu Gothic UI",sans-serif}
+  header{position:sticky;top:0;z-index:5;background:var(--acc);color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center}
+  header h1{margin:0;font-size:17px;white-space:nowrap}
+  main{max-width:760px;margin:0 auto;padding:12px}
+  .login{background:#fff;border:1px solid var(--line);border-radius:12px;padding:20px;margin-top:20px}
+  input,textarea{width:100%;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:8px}
+  button{font-size:16px;padding:10px 16px;border-radius:8px;border:1px solid var(--acc);background:#fff;color:var(--acc);cursor:pointer}
+  button.main{background:var(--acc);color:#fff}
+  button.ng{border-color:var(--warn);color:var(--warn)}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;margin:12px 0;overflow:hidden}
+  .card .hd{padding:12px 14px;display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+  .card .hd b{font-size:17px}
+  .card .hd small{display:block;color:var(--sub)}
+  .tag{font-size:12px;padding:3px 8px;border-radius:999px;white-space:nowrap}
+  .t-wait{background:#fff3d6;color:var(--wait)}.t-ok{background:var(--acc2);color:var(--acc)}.t-ng{background:#fbe5de;color:var(--warn)}
+  .alert{margin:0 14px 10px;padding:8px 10px;border-radius:8px;background:#fff3d6;color:#6b4a00;font-size:14px}
+  details{border-top:1px solid var(--line)}
+  summary{padding:10px 14px;color:var(--acc);cursor:pointer}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  td{padding:6px 14px;border-top:1px solid #eee;vertical-align:top}
+  td:first-child{color:var(--sub);width:40%}
+  .act{display:flex;gap:8px;padding:12px 14px;border-top:1px solid var(--line);flex-wrap:wrap}
+  .act a{align-self:center;color:var(--acc)}
+  .act .grow{flex:1}
+  .empty{text-align:center;color:var(--sub);padding:30px}
+  h3{font-size:14px;color:var(--sub);margin:20px 4px 4px}
+  .toast{position:fixed;left:50%;top:70px;transform:translateX(-50%);background:#333;color:#fff;padding:10px 16px;border-radius:8px;font-size:14px;display:none;z-index:9;white-space:pre-line;max-width:90%}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:center;justify-content:center;z-index:10}
+  .steps{display:flex;gap:4px;padding:0 14px 10px;flex-wrap:wrap}.steps span{font-size:12px;padding:3px 8px;border-radius:6px;background:#eef0ed;color:var(--sub)}.steps span.on{background:var(--acc);color:#fff}.steps span.done{background:var(--acc2);color:var(--acc)}
+  .office{padding:4px 14px 10px;display:grid;grid-template-columns:1fr 1fr;gap:8px}.office label{font-size:12px;color:var(--sub)}.office>div{min-width:0}.office input{min-width:0}.office .full{grid-column:1/3}
+  .modal div{background:#fff;border-radius:12px;padding:16px;width:min(420px,92%)}
+  #pdfv{position:fixed;inset:0;background:#555;z-index:20;display:none;overflow:auto;-webkit-overflow-scrolling:touch}
+  #pdfv .bar{position:sticky;top:0;background:#222;color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;font-size:14px}
+  #pdfv .bar button{padding:6px 14px;font-size:15px}
+  #pdfv img{display:block;width:100%;max-width:1100px;margin:8px auto;background:#fff}
+</style>
+</head>
+<body>
+<header><h1>申請の確認・承認</h1><span id="me"></span></header>
+<main id="app">
+  <div class="login">
+    <p style="margin-top:0">自分の合言葉を入れてください（営業責任者・エリア長・事務所）</p>
+    <input type="password" id="code" autocomplete="current-password">
+    <p><button class="main" onclick="login()">開く</button></p>
+  </div>
+</main>
+<div class="modal" id="rej"><div>
+  <p style="margin-top:0"><b>差し戻しの理由</b></p>
+  <textarea id="reason" rows="3" placeholder="例：単価を確認してください"></textarea>
+  <p style="display:flex;gap:8px;justify-content:flex-end"><button onclick="closeRej()">やめる</button><button class="ng" onclick="doReject()">差し戻す</button></p>
+</div></div>
+<div class="toast" id="toast"></div>
+<div id="pdfv"><div class="bar"><span id="pdft">申請書</span><button onclick="closePdf()">閉じる</button></div><div id="pdfp"></div></div>
+<script>
+const $=s=>document.querySelector(s), esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const GAS=window.google&&google.script&&google.script.run;
+let CODE='', ROWS=[], rejNo='';
+try{CODE=localStorage.getItem('adm')||sessionStorage.getItem('adm')||'';}catch(e){}
+function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',3500);}
+function call(fn,args,ok){
+  if(GAS) google.script.run.withSuccessHandler(ok).withFailureHandler(e=>toast(e.message||e))[fn](...args);
+  else mock(fn,args,ok);
+}
+function login(){CODE=$('#code').value.trim()||CODE;load();}
+const SHOW=['申請日','申請者','得意先名','フリガナ','得意先担当者','TEL','納品先住所','車両停車位置・地図メモ','取引開始日','弁当種類','基本個数','税区分','単価_セット','単価_おかずのみ','単価_ライスのみ','単価_大ライス','単価_大ライスセット','ドライバー引継日','ドライバー配送開始日','ドライバー回収開始日','締日','振込日_月','振込日_日','振込手数料','集金日_月','集金日_日','昼食納品曜日','夕食納品曜日','昼食_納品コース','昼食_納品時刻','特別食','特別食_契約コース','特別食_基本食数','特別食メニュー','特別食_実施日','備考'];
+const STEPS=[['営業責任者確認待ち','営業責任者'],['エリア長承認待ち','エリア長'],['事務所確認待ち','事務所'],['デリ登録待ち','デリ入力'],['登録済','完了']];
+let FLOW={}, ME='';
+function stepsHTML(st){
+  if(st==='差し戻し') return '<div class="steps"><span style="background:#fbe5de;color:var(--warn)">差し戻し</span></div>';
+  const i=STEPS.findIndex(x=>x[0]===st);
+  return '<div class="steps">'+STEPS.map((x,j)=>`<span class="${j<i?'done':j===i?'on':''}">${j<i?'✓ ':''}${x[1]}</span>`).join('')+'</div>';
+}
+function tag(r){const st=r['登録状況'];return r._mine?'<span class="tag t-wait">あなたの番</span>':st==='差し戻し'?'<span class="tag t-ng">差し戻し</span>':st==='登録済'?'<span class="tag t-ok">登録済</span>':'<span class="tag">'+esc(st)+'</span>';}
+function card(r){
+  const st=r['登録状況'], f=FLOW[st], mine=!!r._mine, no=esc(r['受付番号']);
+  const sim=String(r['特別食システム照合']||''), alerts=[];
+  if(r['特別食']==='有'){
+    if(/^既存:/.test(sim)) alerts.push('特別食：入力者は既存の「'+sim.split(':').slice(2).join(':')+'」（'+sim.split(':')[1]+'）と同じと回答');
+    else alerts.push('特別食：エリア長承認のときに特別食システムへ新規登録（状態「新規」）');
+  }
+  if(r['規定外の弁当']) alerts.push('規定外の弁当「'+r['規定外の弁当']+'」'+(r['規定外の弁当承認']?'：承認済（'+r['規定外の弁当承認']+'）':'：営業責任者（福田部長）の承認が必要です'));
+  if(r['配送条件']) alerts.push('配送条件「'+r['配送条件']+'」'+(r['配送条件承認']?'：承認済（'+r['配送条件承認']+'）':'：エリア長の承認が必要です'));
+  if(r['特別食システム']) alerts.push('特別食システム：'+r['特別食システム']);
+  if(r['差し戻し理由']) alerts.push('差し戻し：'+r['差し戻し理由']);
+  const hist=['営業責任者確認','エリア長承認','事務所確認','デリ登録'].filter(k=>r[k]).map(k=>k+' '+r[k]).join('　');
+  const office=mine&&st==='事務所確認待ち'?`<div class="office">
+    <div class="full"><label>得意先CD（デリステーション）</label><input id="cd_${no}" value="${esc(r['得意先CD']||'')}" inputmode="numeric"></div>
+    <div><label>事務所メモ</label><input id="mm_${no}" value="${esc(r['事務所メモ']||'')}"></div></div>`:'';
+  return `<div class="card"><div class="hd"><div><b>${esc(r['得意先名'])}</b><small>${no}・${esc(r['エリア']||'エリア未定')}・${esc(r['申請者'])}・開始 ${esc(r['取引開始日']||'-')}</small></div>${tag(r)}</div>
+  ${stepsHTML(st)}
+  ${alerts.map(a=>`<div class="alert">${esc(a)}</div>`).join('')}
+  <details><summary>入力内容を見る</summary><table>${SHOW.filter(k=>r[k]).map(k=>`<tr><td>${esc(k)}</td><td>${esc(r[k])}</td></tr>`).join('')}${hist?`<tr><td>経過</td><td>${esc(hist)}</td></tr>`:''}</table></details>
+  ${office}
+  <div class="act">${r['申請書']?`<button onclick="openPdf('${no}')">申請書を見る</button>`:''}<span class="grow"></span>
+  ${mine&&f?`${st!=='デリ登録待ち'?`<button class="ng" onclick="openRej('${no}')">差し戻す</button>`:''}<button class="main" onclick="approve('${no}','${esc(st)}')">${esc(st==='営業責任者確認待ち'&&r['規定外の弁当']?'弁当「'+r['規定外の弁当']+'」を認めてエリア長へ回す':st==='エリア長承認待ち'&&r['配送条件']?'配送条件を認めて承認する':f.btn)}</button>`:''}</div></div>`;
+}
+function render(){
+  const w=ROWS.filter(r=>r._mine), d=ROWS.filter(r=>!r._mine);
+  $('#app').innerHTML=`<h3>あなたの番 ${w.length}件</h3>`+(w.length?w.map(card).join(''):'<div class="empty">いま対応する申請はありません</div>')+
+    (d.length?`<h3>その他・最近の申請</h3>`+d.map(card).join(''):'')+`<p style="text-align:center"><button onclick="load()">更新</button></p>`;
+}
+function load(){
+  call('adminList',[CODE],r=>{try{localStorage.setItem('adm',CODE);sessionStorage.setItem('adm',CODE);}catch(e){}$('#me').textContent=r.me+' さん';FLOW=r.flow||{};ROWS=r.rows;render();});
+}
+let busy=false;
+function approve(no,st){
+  if(busy)return; busy=true;
+  let extra=null;
+  if(st==='事務所確認待ち'){
+    const g=id=>{const e=document.getElementById(id+'_'+no);return e?e.value.trim():'';};
+    extra={'得意先CD':g('cd'),'事務所メモ':g('mm')};
+    if(!extra['得意先CD']&&!window.confirm('得意先CDが空です。このまま進めますか？')){busy=false;return;}
+  }
+  call('adminApprove',[CODE,no,extra],m=>{busy=false;toast(m);load();});
+  setTimeout(()=>busy=false,15000);
+}
+// 申請書をPDFにして画面に出す（Googleドライブの許可がなくても見られる）
+let pdfLib=null;
+function loadPdfLib(cb){
+  if(window.pdfjsLib){cb();return;}
+  const sc=document.createElement('script');
+  sc.src='https:\/\/cdnjs.cloudflare.com\/ajax\/libs\/pdf.js\/3.11.174\/pdf.min.js';
+  sc.onload=()=>{pdfjsLib.GlobalWorkerOptions.workerSrc='https:\/\/cdnjs.cloudflare.com\/ajax\/libs\/pdf.js\/3.11.174\/pdf.worker.min.js';cb();};
+  sc.onerror=()=>toast('表示の準備に失敗しました。電波のよいところでもう一度押してください');
+  document.head.appendChild(sc);
+}
+function openPdf(no){
+  $('#pdft').textContent='申請書 '+no+'（作成中…10秒ほど）';$('#pdfp').innerHTML='';$('#pdfv').style.display='block';
+  loadPdfLib(()=>call('adminPdf',[CODE,no],b64=>{
+    const bin=atob(b64), u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);
+    pdfjsLib.getDocument({data:u}).promise.then(async doc=>{
+      $('#pdft').textContent='申請書 '+no+'（指で広げると拡大できます）';
+      for(let i=1;i<=doc.numPages;i++){
+        const pg=await doc.getPage(i), vp0=pg.getViewport({scale:1}), sc=Math.min(3,2200/vp0.width), vp=pg.getViewport({scale:sc});
+        const cv=document.createElement('canvas');cv.width=vp.width;cv.height=vp.height;
+        await pg.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+        const im=document.createElement('img');im.src=cv.toDataURL('image/jpeg',0.85);$('#pdfp').appendChild(im);
+      }
+    }).catch(e=>toast('表示できませんでした：'+e.message));
+  }));
+}
+function closePdf(){$('#pdfv').style.display='none';$('#pdfp').innerHTML='';}
+function openRej(no){rejNo=no;$('#reason').value='';$('#rej').style.display='flex';}
+function closeRej(){$('#rej').style.display='none';}
+function doReject(){const r=$('#reason').value.trim();closeRej();call('adminReject',[CODE,rejNo,r],m=>{toast(m);load();});}
+
+// お試し用（本番では使われない）
+const DFLOW={'営業責任者確認待ち':{role:'営業責任者',next:'エリア長承認待ち',btn:'エリア長へ回す'},'エリア長承認待ち':{role:'エリア長',next:'事務所確認待ち',btn:'承認する'},'事務所確認待ち':{role:'事務所',next:'デリ登録待ち',btn:'確認OK・デリステーション登録へ'},'デリ登録待ち':{role:'事務所',next:'登録済',btn:'デリステーションに入力済みにする'}};
+let DEMO_ROLE='エリア長';
+const DEMO=[{'受付番号':'261105-001','登録状況':'エリア長承認待ち','エリア':'姫路','申請者':'営業 山田','得意先名':'テスト工業株式会社','申請日':'2026-11-05','取引開始日':'2026-12-01','TEL':'079-123-4567','納品先住所':'兵庫県姫路市本町68','弁当種類':'日替わり弁当','基本個数':'40','税区分':'税込','単価_セット':'500','特別食':'有','特別食システム照合':'新規','特別食_契約コース':'月2回','特別食メニュー':'カレー・中華丼','営業責任者確認':'営業責任者 田中 2026/11/05 08:10'},
+ {'受付番号':'261105-002','登録状況':'営業責任者確認待ち','エリア':'滝野','申請者':'ドライバー 佐藤','得意先名':'いけうち 堀工場','申請日':'2026-11-05','取引開始日':'2026-12-07','特別食':'有','特別食システム照合':'既存:1003:いけうち（堀工場）'},
+ {'受付番号':'261104-003','登録状況':'事務所確認待ち','申請者':'営業 山田','得意先名':'サンプル製作所','取引開始日':'2026-11-20','営業責任者確認':'田中 2026/11/04 15:00','エリア長承認':'姫路エリア長 2026/11/04 17:20','エリア':'姫路'}];
+function mock(fn,args,ok){setTimeout(()=>{
+  if(fn==='adminList') ok({me:'（お試し）'+DEMO_ROLE,flow:DFLOW,rows:DEMO.map(r=>Object.assign({},r,{_mine:DFLOW[r['登録状況']]&&DFLOW[r['登録状況']].role===DEMO_ROLE?1:0})).sort((a,b)=>b._mine-a._mine)});
+  else if(fn==='adminApprove'){const r=DEMO.find(x=>x['受付番号']===args[1]);const f=DFLOW[r['登録状況']];if(args[2])Object.assign(r,args[2]);r[{'営業責任者':'営業責任者確認','エリア長':'エリア長承認','事務所':'事務所確認'}[f.role]||'デリ登録']='（お試し）'+DEMO_ROLE;r['登録状況']=f.next;ok('「'+f.next+'」にしました（お試し）');}
+  else if(fn==='adminReject'){const r=DEMO.find(x=>x['受付番号']===args[1]);r['登録状況']='差し戻し';r['差し戻し理由']=args[2];ok('差し戻しました（お試し）');}
+},250);}
+// お試し版だけ：役割を切り替えて見られる
+if(!GAS){document.querySelector('header').insertAdjacentHTML('beforeend','<select id="demoRole" style="font-size:14px;margin-left:8px"><option>営業責任者</option><option selected>エリア長</option><option>事務所</option></select>');
+  document.getElementById('demoRole').addEventListener('change',e=>{DEMO_ROLE=e.target.value;load();});}
+// LINEのリンクに合言葉が入っていれば、そのまま開く
+if(GAS&&google.script.url){google.script.url.getLocation(l=>{const k=l&&l.parameter&&l.parameter.k;if(k)CODE=k;if(CODE)load();});}
+else if(CODE||!GAS) load();
+</script>
+</body>
+</html>

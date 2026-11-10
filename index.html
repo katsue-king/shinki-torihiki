@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<script>
+/* GitHub Pages 版：Google Apps Script の google.script.run を、本番の入り口（doPost）への問い合わせに置きかえる */
+(function(){
+  if (window.google && window.google.script) return;
+  var API = 'https://script.google.com/macros/s/AKfycbxhmF1yyM1WHMoPxTpy0WwhAjRyihEg6ayEUox88uUahafqHRHBz99_Q8pPKOdjYmiD/exec';
+  function call(fn, args, ok, ng){
+    fetch(API, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify({api:fn, args:args})})
+      .then(function(r){ return r.json(); })
+      .then(function(j){ if (j && j.ok) { if (ok) ok(j.result); } else { var e = new Error((j && j.error) || '失敗しました'); if (ng) ng(e); else console.error(e); } })
+      .catch(function(e){ if (ng) ng(e); else console.error(e); });
+  }
+  function runner(ok, ng){
+    return new Proxy({}, {get:function(t, p){
+      if (p === 'withSuccessHandler') return function(f){ return runner(f, ng); };
+      if (p === 'withFailureHandler') return function(f){ return runner(ok, f); };
+      return function(){ call(p, Array.prototype.slice.call(arguments), ok, ng); };
+    }});
+  }
+  window.google = {script:{
+    run: runner(null, null),
+    url: {getLocation:function(cb){ var o = {}; new URLSearchParams(location.search).forEach(function(v,k){ o[k] = v; }); cb({parameter:o}); }}
+  }};
+})();
+</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>新規取引申請書</title>
+<style>
+  :root{--bg:#f4f5f2;--card:#fff;--ink:#1d2320;--sub:#66706b;--line:#d9ddd8;--acc:#1f6b4f;--acc2:#e7f2ec;--warn:#b3401f}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,"Hiragino Sans","Yu Gothic UI",sans-serif;-webkit-text-size-adjust:100%}
+  header{position:sticky;top:0;z-index:5;background:var(--acc);color:#fff;padding:12px 16px 10px}
+  header h1{margin:0;font-size:18px;letter-spacing:.05em}
+  header .prog{height:4px;background:rgba(255,255,255,.25);border-radius:2px;margin-top:8px;overflow:hidden}
+  header .prog i{display:block;height:100%;width:0;background:#fff;transition:width .2s}
+  main{max-width:640px;margin:0 auto;padding:12px 12px 120px}
+  section{background:var(--card);border:1px solid var(--line);border-radius:12px;margin:12px 0;overflow:hidden}
+  section>h2{margin:0;padding:12px 14px;font-size:16px;background:var(--acc2);color:var(--acc);display:flex;justify-content:space-between}
+  section>h2 small{color:var(--sub);font-weight:normal;font-size:12px}
+  .body{padding:4px 14px 14px}
+  .f{margin-top:12px}
+  .f>label{display:block;font-size:13px;color:var(--sub);margin-bottom:4px}
+  .f>label b{color:var(--warn);font-weight:normal;margin-left:4px}
+  input[type=text],input[type=tel],input[type=number],input[type=date],input[type=time],textarea,select{width:100%;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+  textarea{min-height:72px}
+  .unit{display:flex;align-items:center;gap:8px}.unit span{color:var(--sub);white-space:nowrap}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chips label{position:relative}
+  .chips input{position:absolute;opacity:0}
+  .chips span{display:inline-block;padding:8px 14px;border:1px solid var(--line);border-radius:999px;background:#fff;font-size:15px;min-width:44px;text-align:center}
+  .chips input:checked+span{background:var(--acc);color:#fff;border-color:var(--acc)}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .hint{font-size:12px;color:var(--sub);margin-top:4px}
+  .err input,.err textarea,.err .chips span{border-color:var(--warn)}
+  .photo img{max-width:100%;border-radius:8px;margin-top:6px}
+  .mapbtn{margin-top:8px;width:100%;font-size:16px;padding:11px;border-radius:8px;border:1px solid var(--acc);background:var(--acc2);color:var(--acc);font-weight:bold}
+  #mapPanel{position:fixed;inset:0;z-index:20;background:var(--bg);display:none;flex-direction:column}
+  #mapPanel .top{background:var(--acc);color:#fff;padding:12px 14px;display:flex;justify-content:space-between;align-items:center}
+  #mapPanel .top button{background:none;border:none;color:#fff;font-size:16px}
+  #mapPanel .sbox{display:flex;gap:8px;padding:12px}
+  #mapPanel .sbox button{white-space:nowrap;font-size:16px;padding:0 16px;border-radius:8px;border:none;background:var(--acc);color:#fff}
+  #mapRes{flex:1;overflow:auto;padding:0 12px 20px}
+  .mres{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px}
+  .mres b{display:block;font-size:16px}.mres small{color:var(--sub)}
+  .mres button{margin-top:8px;width:100%;font-size:16px;padding:10px;border-radius:8px;border:none;background:var(--acc);color:#fff}
+  .mapimg img{width:100%;border-radius:8px;margin-top:8px;border:1px solid var(--line)}
+  .mapimg a{display:inline-block;margin-top:6px;color:var(--acc)}
+  footer{position:fixed;bottom:0;left:0;right:0;background:rgba(244,245,242,.96);border-top:1px solid var(--line);padding:10px 12px calc(10px + env(safe-area-inset-bottom));display:flex;gap:8px;justify-content:center}
+  footer button{font-size:16px;padding:12px 18px;border-radius:10px;border:1px solid var(--acc);background:#fff;color:var(--acc)}
+  footer button.main{background:var(--acc);color:#fff;flex:1;max-width:420px}
+  #done{display:none;text-align:center;padding:40px 16px}
+  #done h2{color:var(--acc)}
+  .toast{position:fixed;left:50%;top:70px;transform:translateX(-50%);background:#333;color:#fff;padding:8px 14px;border-radius:8px;font-size:14px;display:none;z-index:9}
+</style>
+</head>
+<body>
+<header><h1>新規取引申請書</h1><div class="prog"><i id="bar"></i></div></header>
+<main id="form"></main>
+<div id="done"><h2>送信しました</h2><p id="doneMsg"></p><button onclick="location.reload()" style="font-size:16px;padding:12px 20px">続けて入力する</button></div>
+<footer id="foot"><button onclick="saveDraft(true)">一時保存</button><button class="main" onclick="submitForm()">送信する</button></footer>
+<div class="toast" id="toast"></div>
+<datalist id="courses"></datalist>
+<div id="mapPanel">
+  <div class="top"><b>地図で探す</b><button onclick="closeMap()">✕ 閉じる</button></div>
+  <div class="sbox"><input type="text" id="mapQ" placeholder="会社名や住所（例：○○工業 姫路）" enterkeyhint="search"><button onclick="mapSearch()">検索</button></div>
+  <div id="mapRes"><div class="hint" style="padding:4px">会社名だけで出ないときは、地名（姫路・加古川など）を足してください。</div></div>
+</div>
+
+<script>
+// ===== 項目定義（申請書の表面＋裏面の特別食）。k がスプレッドシートの列名になる =====
+const WD=['月','火','水','木','金','土','日','祝'];
+const UMU=['有','無'];
+const DIST=['有（毎日配送）','有（まとめ置き）','無'];
+const SECTIONS=[
+ {t:'基本情報',f:[
+  {k:'合言葉',type:'text',req:1,label:'自分の合言葉',hint:'一人ずつ配られた合言葉（一度入れるとこのスマホに記憶されます）'},
+  {k:'申請日',type:'date',req:1,today:1},
+  {k:'得意先名',type:'text',req:1,map:1,hint:'「地図で探す」で会社名から住所まで入れられます'},
+  {k:'フリガナ',type:'text',ph:'ひらがなで'},
+  {k:'前取引メーカー',type:'text'},
+  {k:'得意先担当者',type:'text'},{k:'役職',type:'text'},
+  {k:'TEL',type:'tel',ph:'079-000-0000'},{k:'FAX',type:'tel'},
+ ]},
+ {t:'納品先・請求先',f:[
+  {k:'納品先郵便番号',type:'tel',ph:'670-0000',zip:'納品先住所'},
+  {k:'納品先住所',type:'text',req:1},
+  {k:'車両停車位置・地図メモ',type:'textarea',req:1,hint:'※必須（地図・車両停車位置）'},
+  {k:'地図',type:'mapview'},
+  {k:'停車位置写真',type:'photo',hint:'現地や地図の写真を添付できます'},
+  {k:'請求先は納品先と同じ',type:'radio',opts:['同じ','別'],def:'同じ'},
+  {k:'請求先郵便番号',type:'tel',zip:'請求先住所',if:['請求先は納品先と同じ','別']},
+  {k:'請求先住所',type:'text',if:['請求先は納品先と同じ','別']},
+  {k:'請求書の渡し方',type:'radio',opts:['郵送','手渡し']},
+  {k:'手渡し方法',type:'radio',opts:['弁当と一緒に置く','直接手渡し'],if:['請求書の渡し方','手渡し']},
+  {k:'手渡し場所',type:'text',if:['手渡し方法','直接手渡し']},
+ ]},
+ {t:'取引条件',f:[
+  {k:'取引開始日',type:'date',req:1},
+  {k:'ドライバー引継日',type:'date'},
+  {k:'ドライバー配送開始日',type:'date'},
+  {k:'ドライバー回収開始日',type:'date'},
+  {k:'現場の場合_終了予定日',type:'date',hint:'工事現場など期間限定の場合（〜頃迄）'},
+  {k:'月交代',type:'radio',opts:UMU},
+  {k:'受注方法',type:'select',opts:['電話','FAX','メール','Web','現地確認']},
+  {k:'弁当種類',type:'multi',opts:['華弁当','華弁当大','華弁当おかず','夜セット','夜セット大盛','夜おかず','HOT&COOL（承認が必要）','その他（上長の承認が必要）'],hint:'いくつでも選べます。HOT&COOLとその他は、福田部長の承認が必要です'},
+  {k:'弁当種類_その他',type:'text',req:1,label:'弁当の内容（その他）',ph:'例：ヘルシー、揚げ物抜き',if:['弁当種類','その他（上長の承認が必要）'],hint:'決まった種類以外は、福田部長の承認が必要です'},
+  {k:'基本個数',type:'number',unit:'個'},
+ ]},
+ {t:'弁当単価',f:[
+  {k:'税区分',type:'radio',opts:['税込','税別'],def:'税込'},
+  {k:'単価_セット',type:'number',unit:'円',req:1},
+  {k:'単価_おかずのみ',type:'number',unit:'円'},
+  {k:'単価_ライスのみ',type:'number',unit:'円'},
+  {k:'単価_大ライス',type:'number',unit:'円'},
+  {k:'単価_大ライスセット',type:'number',unit:'円'},
+ ]},
+ {t:'集金方法',f:[
+  {k:'締日',type:'number',unit:'日',hint:'末締めは 31'},
+  {k:'振込日_月',type:'radio',opts:['当月','翌月','翌々月']},{k:'振込日_日',type:'number',unit:'日'},
+  {k:'振込手数料',type:'radio',opts:['当社負担','先方負担'],req:1,if:['振込日_月','*'],hint:'振込のときは、振込手数料をどちらが負担するか選んでください'},
+  {k:'集金日_月',type:'radio',opts:['当月','翌月','翌々月']},{k:'集金日_日',type:'number',unit:'日'},
+ ]},
+ {t:'納品曜日',f:[
+  {k:'昼食納品曜日',type:'multi',opts:WD},
+  {k:'夕食納品曜日',type:'multi',opts:WD},
+  {k:'大型連休',type:'radio',opts:['出','休']},
+  {k:'カレンダー',type:'radio',opts:UMU},
+  {k:'IHスイッチ',type:'radio',opts:['保温','さわらない']},
+  {k:'備考',type:'textarea',hint:'書くと、エリア長の承認が必要になります'},
+ ]},
+ {t:'配送（昼食）',f:[
+  {k:'昼食_納品コース',type:'text',list:'courses',ph:'例：高砂コース'},
+  {k:'エリア',type:'radio',opts:['本社','姫路','滝野','三田','日鉄'],req:1,hint:'コースを入れると自動で選ばれます（承認するエリア長が決まります）'},{k:'昼食_納品_前の得意先',type:'text',label:'この得意先の前（〜の次）'},
+  {k:'昼食_納品時刻',type:'time',label:'何時頃までに納品',hint:'入れると、エリア長の承認が必要になります'},
+  {k:'昼食_前の得意先からの所要時間',type:'number',unit:'分'},
+  {k:'昼食_回収',type:'radio',opts:['翌日納品時','当日']},
+  {k:'昼食_回収スタート時刻',type:'time',label:'回収スタート（〜以降）',if:['昼食_回収','当日']},
+  {k:'昼食_回収コース',type:'text',list:'courses',if:['昼食_回収','当日']},
+  {k:'昼食_回収_前の得意先',type:'text',label:'回収：この得意先の前（〜の次）',if:['昼食_回収','当日']},
+ ]},
+ {t:'配送（夕食）',note:'夕食がある場合のみ',f:[
+  {k:'夕食_納品コース',type:'text',list:'courses'},{k:'夕食_納品_前の得意先',type:'text',label:'この得意先の前（〜の次）'},
+  {k:'夕食_納品時刻',type:'time',label:'何時頃までに納品',hint:'入れると、エリア長の承認が必要になります'},
+ ]},
+ {t:'特別食・みそ汁',note:'15食以上から',f:[
+  {k:'特別食',type:'radio',opts:UMU},
+  {k:'特別食システム照合',type:'simcheck',if:['特別食','有']},
+  {k:'寸胴みそ汁',type:'radio',opts:UMU},
+  {k:'寸胴サイズ',type:'radio',opts:['S（15）','M（15〜25）','L（25〜35）','2L（35〜50）','Sジャー'],if:['寸胴みそ汁','有']},
+  {k:'寸胴個数',type:'number',unit:'個',if:['寸胴みそ汁','有']},
+  {k:'Sジャー容量',type:'number',unit:'ℓ',if:['寸胴サイズ','Sジャー']},
+  {k:'平日以外の練りみそ',type:'radio',opts:['練OK','不可'],if:['寸胴みそ汁','有']},
+ ]},
+ {t:'付帯品',f:[
+  {k:'練りみそ',type:'radio',opts:DIST,hint:'推奨：毎日配送'},
+  {k:'ふりかけ',type:'radio',opts:DIST,hint:'推奨：毎日配送'},
+  {k:'お箸',type:'radio',opts:DIST,hint:'推奨：毎日配送'},
+  {k:'しょうゆ',type:'radio',opts:UMU},{k:'しょうゆ形状',type:'radio',opts:['スティック','ボトル'],if:['しょうゆ','有']},
+  {k:'ソース',type:'radio',opts:UMU},{k:'ソース形状',type:'radio',opts:['スティック','ボトル'],if:['ソース','有']},
+  {k:'お茶',type:'radio',opts:UMU},{k:'お茶容器',type:'radio',opts:['ジャグ','ポリ'],if:['お茶','有']},
+  {k:'湯呑',type:'radio',opts:UMU},
+  {k:'汁椀',type:'radio',opts:['毎日配送','先方分使用','貸与','無']},
+  {k:'汁椀貸与数',type:'number',unit:'個',if:['汁椀','貸与']},
+  {k:'お玉',type:'radio',opts:UMU},
+  {k:'お玉本数',type:'number',unit:'本',if:['お玉','有']},
+  {k:'お玉配送',type:'radio',opts:['毎日配送','貸与'],if:['お玉','有']},
+  {k:'温蔵庫',type:'radio',opts:UMU},
+  {k:'温蔵庫型番',type:'text',if:['温蔵庫','有']},{k:'温蔵庫台数',type:'number',unit:'台',if:['温蔵庫','有']},
+  {k:'IH貸与台数',type:'number',unit:'台'},
+  {k:'その他貸与物',type:'text'},
+ ]},
+ {t:'特別食の内容（裏面）',if:['特別食','有'],f:[
+  {k:'特別食_実施日',type:'date',label:'実施日（〜より）'},
+  {k:'特別食_契約コース',type:'radio',opts:['月1回','月2回','月3回','月4回','月5回','個別'],label:'回数（契約コース）'},
+  {k:'特別食_基本食数',type:'number',unit:'食',hint:'納品場所が分かれる時は備考に内訳'},
+  {k:'特別食メニュー',type:'multi',opts:['カレー','中華丼','温うどん','冷うどん','温そば','冷そば','レトルト','かきたま汁','豚汁','コンソメスープ'],label:'希望メニュー'},
+  {k:'特別食_希望曜日',type:'multi',opts:['月','火','水','木','金']},
+  {k:'特別食_NG曜日',type:'multi',opts:['月','火','水','木','金']},
+  {k:'特別食_指定週',type:'multi',opts:['第1','第2','第3','第4','第5']},
+  {k:'島津さんへの事前連絡',type:'radio',opts:['済','未']},
+  {k:'島津さん連絡日',type:'date',if:['島津さんへの事前連絡','済']},
+  {k:'特別食内容',type:'textarea'},{k:'頻度・要領',type:'textarea'},{k:'実施日程',type:'text'},
+  {k:'特別食_備考',type:'textarea'},
+  {k:'カレー',type:'radio',opts:UMU},
+  {k:'カレー_食数',type:'number',unit:'食',if:['カレー','有']},
+  {k:'カレー_ルー容器',type:'radio',opts:['寸胴','ジャー','スープジャー','レトルト'],if:['カレー','有']},
+  {k:'カレー_お玉',type:'number',unit:'個',if:['カレー','有']},
+  {k:'カレー_ライス容器',type:'radio',opts:['ジャー','箱'],if:['カレー','有']},
+  {k:'カレー_付属',type:'multi',opts:['みそ汁','福神漬','サラダ','カレー皿','おかず','スプーン','しゃもじ'],label:'カレー：付けるもの',if:['カレー','有']},
+  {k:'カレー_弁当種類',type:'text',if:['カレー','有']},
+  {k:'中華丼',type:'radio',opts:UMU},
+  {k:'中華丼_食数',type:'number',unit:'食',if:['中華丼','有']},
+  {k:'中華丼_ルー容器',type:'radio',opts:['寸胴','ジャー','スープジャー'],if:['中華丼','有']},
+  {k:'中華丼_お玉',type:'number',unit:'個',if:['中華丼','有']},
+  {k:'中華丼_ライス容器',type:'radio',opts:['ジャー','箱'],if:['中華丼','有']},
+  {k:'中華丼_付属',type:'multi',opts:['みそ汁','サラダ','おかず','どんぶり','しゃもじ','スプーン'],label:'中華丼：付けるもの',if:['中華丼','有']},
+  {k:'中華丼_弁当種類',type:'text',if:['中華丼','有']},
+  {k:'原価_月回数',type:'number',unit:'回',label:'特別食の回数（個別のとき・1か月）',if:['特別食_契約コース','個別']},
+  {k:'原価_サービス品',type:'multi',opts:['寸胴みそ汁','練りみそ','ふりかけ','醤油ソース','お茶'],label:'原価計算：付けるサービス品',hint:'寸胴みそ汁8円・練りみそ4円・ふりかけ4円・醤油ソース2円・お茶8円'},
+  {k:'原価_おかず',type:'radio',opts:['特','R'],label:'原価計算：おかず',hint:'特92円・R97円'},
+  {k:'原価_ライス',type:'radio',opts:['並','大'],label:'原価計算：ライス',hint:'並35円・大39円'},
+  {k:'原価計算',type:'costcalc',label:'単価〜粗利（自動計算）'},
+ ]},
+ {t:'事務所記入欄（右上の欄）',note:'分かる範囲で',f:[
+  {k:'得意先CD',type:'text'},
+  {k:'ドライバー引継日',type:'date'},
+  {k:'ドライバー配送開始日',type:'date',label:'ドライバー配送（〜から）'},
+  {k:'ドライバー回収開始日',type:'date',label:'ドライバー回収（〜から）'},
+ ]},
+];
+
+// ===== 画面を組み立てる =====
+const $=s=>document.querySelector(s), esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let photoData=null;
+function fieldHTML(f){
+  const id='f_'+f.k, lab=esc(f.label||f.k)+(f.req?'<b>必須</b>':'');
+  let inner='';
+  if(f.type==='radio'||f.type==='multi'){
+    const t=f.type==='radio'?'radio':'checkbox';
+    inner='<div class="chips">'+f.opts.map(o=>`<label><input type="${t}" name="${esc(f.k)}" value="${esc(o)}"${f.def===o?' checked':''}><span>${esc(o)}</span></label>`).join('')+'</div>';
+  }else if(f.type==='textarea'){inner=`<textarea id="${id}" name="${esc(f.k)}"></textarea>`;}
+  else if(f.type==='simcheck'){inner=`<div id="simBox" class="hint">得意先名を入れると、特別食システムの既存のお客さんと照らし合わせます</div><input type="hidden" name="特別食システム照合">`;}
+  else if(f.type==='mapview'){inner=`<div class="mapimg" id="mapView"><div class="hint">「地図で探す」で選ぶと、ここに地図が出ます</div></div><input type="hidden" name="緯度経度"><input type="hidden" name="GoogleマップURL">`;}
+  else if(f.type==='select'){inner=`<select id="${id}" name="${esc(f.k)}"><option value="">選んでください</option>${f.opts.map(o=>`<option>${esc(o)}</option>`).join('')}</select>`;}
+  else if(f.type==='costcalc'){inner=`<div id="costBox" class="hint">表の「セット単価」「基本個数」と、上の原価の選択から自動で計算します</div>`;}
+  else if(f.type==='photo'){inner=`<div class="photo"><input type="file" accept="image/*" capture="environment" id="${id}"><img id="${id}_img" hidden></div>`;}
+  else{
+    const ty=f.type==='number'?'number':f.type;
+    const extra=f.type==='number'?' inputmode="numeric"':'';
+    const inp=`<input type="${ty}" id="${id}" name="${esc(f.k)}"${extra}${f.list?` list="${f.list}"`:''} placeholder="${esc(f.ph||'')}">`;
+    inner=f.unit?`<div class="unit">${inp}<span>${esc(f.unit)}</span></div>`:inp;
+  }
+  if(f.map) inner+=`<button type="button" class="mapbtn" onclick="openMap()">&#x1F5FA; 地図で探す（Googleマップ）</button>`;
+  return `<div class="f" data-k="${esc(f.k)}"${f.if?` data-if="${esc(JSON.stringify(f.if))}"`:''}><label>${lab}</label>${inner}${f.hint?`<div class="hint">${esc(f.hint)}</div>`:''}</div>`;
+}
+$('#form').innerHTML=SECTIONS.map((s,i)=>`<section data-sec="${i}"${s.if?` data-if="${esc(JSON.stringify(s.if))}"`:''}><h2>${esc(s.t)}${s.note?`<small>${esc(s.note)}</small>`:''}</h2><div class="body">${s.f.map(fieldHTML).join('')}</div></section>`).join('');
+SECTIONS.flatMap(s=>s.f).forEach(f=>{
+  if(f.today){const el=document.getElementById('f_'+f.k);el.value=new Date(Date.now()+9*36e5).toISOString().slice(0,10);}
+  if(f.zip){const el=document.getElementById('f_'+f.k);el.addEventListener('change',()=>zipLookup(el.value,f.zip));}
+  if(f.type==='photo'){const el=document.getElementById('f_'+f.k);el.addEventListener('change',()=>loadPhoto(el,f.k));}
+});
+
+function costCalc(get) {
+  const num = k => { const n = Number(String(get(k) || '').replace(/[,，円個食回\s]/g, '')); return isFinite(n) ? n : 0; };
+  const has = (k, o) => String(get(k) || '').split('・').indexOf(o) >= 0;
+  const SV = [['寸胴みそ汁', 8, 16], ['練りみそ', 4, 17], ['ふりかけ', 4, 18], ['醤油ソース', 2, 19], ['お茶', 8, 21]];
+  const items = SV.map(([name, yen, row]) => ({ name: name, yen: yen, row: row, on: has('原価_サービス品', name) || (name === '醤油ソース' && has('原価_サービス品', '醤油')) }));
+  const course = String(get('特別食_契約コース') || '');
+  const m = /月(\d+)回/.exec(course);
+  const times = m ? +m[1] : (course === '個別' ? num('原価_月回数') : 0);
+  const sp = times * 6;
+  const s1 = items.reduce((a, i) => a + (i.on ? i.yen : 0), 0) + sp;
+  const okazu = get('原価_おかず') || '', rice = get('原価_ライス') || '';
+  const okazuYen = okazu === '特' ? 92 : okazu === 'R' ? 97 : 0;
+  const riceYen = rice === '並' ? 35 : rice === '大' ? 39 : 0;
+  const s2 = okazuYen + riceYen, total = s1 + s2;
+  const raw = num('単価_セット');
+  const net = raw ? (get('税区分') === '税別' ? raw : Math.floor(raw / 1.08)) : 0;
+  const qty = num('基本個数');
+  const unitProfit = net ? net - total : 0;
+  const sales = net * qty, cost = total * qty, profit = sales - cost;
+  const rate = net ? total / net : 0;
+  const rank = (net && qty) ? (rate < 0.37 ? (profit >= 4000 ? 'A' : 'C') : (profit >= 4000 ? 'B' : 'D')) : '';
+  return { items: items, times: times, sp: sp, s1: s1, okazu: okazu, okazuYen: okazuYen, rice: rice, riceYen: riceYen, s2: s2, total: total,
+    raw: raw, net: net, taxIn: get('税区分') !== '税別', qty: qty, unitProfit: unitProfit, sales: sales, cost: cost, profit: profit, rate: rate, rank: rank };
+}
+function getVal(k){
+  const els=document.getElementsByName(k);
+  if(!els.length) return '';
+  if(els[0].type==='radio'){const c=[...els].find(e=>e.checked);return c?c.value:'';}
+  if(els[0].type==='checkbox'){return [...els].filter(e=>e.checked).map(e=>e.value).join('・');}
+  return els[0].value.trim();
+}
+function setVal(k,v){
+  const els=document.getElementsByName(k); if(!els.length) return;
+  if(els[0].type==='radio') els.forEach(e=>e.checked=e.value===v);
+  else if(els[0].type==='checkbox'){const a=String(v).split('・');els.forEach(e=>e.checked=a.includes(e.value));}
+  else els[0].value=v;
+}
+function applyIf(){
+  document.querySelectorAll('[data-if]').forEach(el=>{const [k,v]=JSON.parse(el.dataset.if);el.hidden=v==='*'?!getVal(k):!String(getVal(k)).split('・').includes(v);});
+  // 進み具合
+  const vis=[...document.querySelectorAll('.f')].filter(e=>!e.closest('[hidden]'));
+  const filled=vis.filter(e=>getVal(e.dataset.k)||(e.querySelector('img')&&!e.querySelector('img').hidden));
+  $('#bar').style.width=(vis.length?filled.length/vis.length*100:0)+'%';
+}
+document.addEventListener('change',()=>{applyIf();saveDraft(false);});
+document.addEventListener('input',()=>applyIf());
+function showCost(){const b=document.getElementById('costBox');if(!b)return;const k=costCalc(getVal),Y=n=>Number(n).toLocaleString('ja-JP');
+  const rows=[['小計①（サービス原価）',Y(k.s1)+'円'+(k.times?'（特別食 月'+k.times+'回＝'+k.sp+'円 を含む）':'')],['小計②（おかず・ライス）',Y(k.s2)+'円'],['③総原価',Y(k.total)+'円'],
+   ['単価（税抜）',k.net?Y(k.net)+'円'+(k.taxIn?'（税込'+Y(k.raw)+'円÷1.08）':''):'表のセット単価を入れてください'],['1食の粗利',k.net?Y(k.unitProfit)+'円':'—'],
+   ['1日数量',k.qty?Y(k.qty)+'食':'表の基本個数を入れてください'],['1日の売上',k.net&&k.qty?Y(k.sales)+'円':'—'],['1日の原価',k.net&&k.qty?Y(k.cost)+'円（原価率 '+(Math.round(k.rate*1000)/10)+'％）':'—'],
+   ['1日の粗利',k.net&&k.qty?Y(k.profit)+'円':'—'],['収益性',k.rank?'<b>'+k.rank+'</b>':'—']];
+  b.innerHTML='<table style="width:100%;border-collapse:collapse">'+rows.map(r=>'<tr><td style="padding:3px 0">'+r[0]+'</td><td style="text-align:right">'+r[1]+'</td></tr>').join('')+'</table>';}
+document.addEventListener('change',showCost);document.addEventListener('input',showCost);setTimeout(showCost,300);
+
+
+// ===== 特別食システムの既存のお客さんと照らし合わせ =====
+let simFor='';
+function runSimCheck(){
+  const name=getVal('得意先名'); if(getVal('特別食')!=='有'||!name||name===simFor) return; simFor=name;
+  const box=$('#simBox'); box.textContent='照らし合わせ中…';
+  const show=list=>{
+    if(!list||!list.length){box.innerHTML='特別食システムに似た名前はありません → <b>新規</b>として登録します';setVal('特別食システム照合','新規');return;}
+    box.innerHTML='特別食システムに似た名前があります。同じお客さんですか？<div class="chips" style="margin-top:6px">'+
+      list.map(x=>`<label><input type="radio" name="simPick" value="既存:${esc(x.code)}:${esc(x.name)}"><span>${esc(x.name)}（${esc(x.code)}・${esc(x.status)}）</span></label>`).join('')+
+      `<label><input type="radio" name="simPick" value="新規"><span>どれでもない（新規）</span></label></div>`;
+    setVal('特別食システム照合','');
+    document.getElementsByName('simPick').forEach(e=>e.addEventListener('change',()=>setVal('特別食システム照合',e.value)));
+  };
+  if(window.google&&google.script&&google.script.run) google.script.run.withSuccessHandler(show).checkSpecialName(name);
+  else show(name.indexOf('いけうち')>=0?[{code:'1002',name:'いけうち（上比延工場）',status:'継続'},{code:'1003',name:'いけうち（堀工場）',status:'継続'}]:[]);
+}
+document.addEventListener('change',e=>{if(e.target.name==='得意先名'||e.target.name==='特別食'){simFor='';runSimCheck();}
+  if(e.target.name==='昼食_納品コース'&&e.target.value&&window.google&&google.script&&google.script.run) google.script.run.withSuccessHandler(a=>{if(a){setVal('エリア',a);applyIf();}}).areaOfCourse(e.target.value);});
+
+// ===== 地図で探す（Googleマップ）=====
+let mapHits=[];
+function openMap(){$('#mapPanel').style.display='flex';const q=getVal('得意先名');$('#mapQ').value=q;if(q)mapSearch();else $('#mapQ').focus();}
+function closeMap(){$('#mapPanel').style.display='none';}
+document.addEventListener('keydown',e=>{if(e.target.id==='mapQ'&&e.key==='Enter'){e.preventDefault();mapSearch();}});
+function mapSearch(){
+  const q=$('#mapQ').value.trim(); if(!q) return;
+  $('#mapRes').innerHTML='<div class="hint" style="padding:4px">検索中…</div>';
+  const show=list=>{
+    mapHits=list||[];
+    if(!mapHits.length){$('#mapRes').innerHTML='<div class="hint" style="padding:4px">見つかりませんでした。地名を足すか、住所で探してください。</div>';return;}
+    $('#mapRes').innerHTML=mapHits.map((h,i)=>`<div class="mres"><b>${esc(h.name||h.address)}</b><small>〒${esc(h.zip||'---')}　${esc(h.address)}</small>${h.img?`<div class="mapimg"><img src="${h.img}"></div>`:''}<button onclick="pickMap(${i})">これにする</button></div>`).join('');
+  };
+  if(window.google&&google.script&&google.script.run) google.script.run.withSuccessHandler(show).withFailureHandler(e=>{$('#mapRes').innerHTML='<div class="hint">検索できませんでした：'+esc(e.message||e)+'</div>';}).mapSearch(q);
+  else setTimeout(()=>show([{name:q+'（お試し表示）',address:'兵庫県姫路市本町68',zip:'670-0012',lat:34.839,lng:134.694,url:'https:\/\/www.google.com/maps/search/?api=1&query=34.839,134.694',img:''}]),300);
+}
+function pickMap(i){
+  const h=mapHits[i];
+  if(h.name&&(!getVal('得意先名')||confirm('得意先名を「'+h.name+'」にしますか？\n（キャンセルで今の名前のまま）'))) setVal('得意先名',h.name);
+  if(h.zip) setVal('納品先郵便番号',h.zip);
+  setVal('納品先住所',h.address);
+  setVal('緯度経度',h.lat+','+h.lng); setVal('GoogleマップURL',h.url);
+  showMapView(h); closeMap(); applyIf(); saveDraft(false);
+  toast('地図の情報を入れました。番地・建物名を確認してください');
+  document.querySelector('[data-k="納品先住所"]').scrollIntoView({behavior:'smooth',block:'center'});
+}
+function showMapView(h){
+  $('#mapView').innerHTML=(h.img?`<img src="${h.img}">`:'')+`<a href="${esc(h.url)}" target="_blank" rel="noopener">Googleマップで開いて確認する ↗</a>`;
+}
+
+// ===== 郵便番号から住所 =====
+function zipLookup(z,target){
+  z=z.replace(/[^0-9]/g,''); if(z.length!==7) return;
+  const put=a=>{const el=document.getElementsByName(target)[0];if(a&&!el.value){el.value=a;toast('住所を入れました（番地を追加してください）');}};
+  if(window.google&&google.script&&google.script.run) google.script.run.withSuccessHandler(put).zip(z);
+}
+// ===== 写真（縮小してから送る）=====
+function loadPhoto(el,k){
+  const file=el.files[0]; if(!file) return;
+  const img=new Image(); img.onload=()=>{
+    const m=1280,s=Math.min(1,m/Math.max(img.width,img.height)),c=document.createElement('canvas');
+    c.width=img.width*s;c.height=img.height*s;c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    photoData=c.toDataURL('image/jpeg',0.8);
+    const p=document.getElementById(el.id+'_img');p.src=photoData;p.hidden=false;applyIf();
+  }; img.src=URL.createObjectURL(file);
+}
+// ===== 一時保存（この端末に）=====
+const DKEY='shinki_torihiki_draft';
+function collect(){const o={};SECTIONS.forEach(s=>s.f.forEach(f=>{if(f.type!=='photo'&&f.type!=='mapview')o[f.k]=getVal(f.k);}));o['緯度経度']=getVal('緯度経度');o['GoogleマップURL']=getVal('GoogleマップURL');o['営業先ID']=getVal('営業先ID');return o;}
+function saveDraft(show){try{localStorage.setItem(DKEY,JSON.stringify(collect()));if(show)toast('この端末に一時保存しました');}catch(e){if(show)toast('この画面では一時保存できません');}}
+function loadDraft(){try{const d=JSON.parse(localStorage.getItem(DKEY)||'null');if(d&&d['得意先名']&&confirm('前回の入力途中（'+d['得意先名']+'）を開きますか？'))Object.entries(d).forEach(([k,v])=>setVal(k,v));}catch(e){}}
+function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',2200);}
+
+// ===== 送信 =====
+function submitForm(){
+  document.querySelectorAll('.err').forEach(e=>e.classList.remove('err'));
+  const miss=[];
+  SECTIONS.forEach(s=>s.f.forEach(f=>{
+    if(!f.req) return; const box=document.querySelector(`.f[data-k="${CSS.escape(f.k)}"]`);
+    if(box.closest('[hidden]')) return;
+    if(!getVal(f.k)){box.classList.add('err');miss.push(f.label||f.k);}
+  }));
+  if(getVal('特別食')==='有'&&getVal('得意先名')&&!getVal('特別食システム照合')&&document.getElementsByName('simPick').length){miss.push('特別食システムの照合（同じお客さんか）');document.querySelector('[data-k="特別食システム照合"]').classList.add('err');}
+  if(miss.length){toast('未入力：'+miss.join('、'));document.querySelector('.err').scrollIntoView({behavior:'smooth',block:'center'});return;}
+  // 非表示の項目は空にして送る
+  const data=collect();
+  document.querySelectorAll('.f').forEach(b=>{if(b.closest('[hidden]'))data[b.dataset.k]='';});
+  const btn=document.querySelector('footer .main');btn.disabled=true;btn.textContent='送信中…';
+  const ok=r=>{try{localStorage.removeItem(DKEY);}catch(e){}
+    $('#form').style.display='none';$('#foot').style.display='none';$('#done').style.display='block';
+    $('#doneMsg').textContent=(r&&r.no?'受付番号 '+r.no+'　':'')+data['得意先名']+' の申請を受け付けました。営業責任者・エリア長の承認と事務所の確認を経て登録されます。';window.scrollTo(0,0);};
+  const ng=e=>{btn.disabled=false;btn.textContent='送信する';alert('送信できませんでした。電波の良い場所でもう一度押してください。\n'+(e&&e.message||e));};
+  if(window.google&&google.script&&google.script.run){
+    google.script.run.withSuccessHandler(ok).withFailureHandler(ng).submit(data,photoData);
+  }else{ // お試し版：送信内容を表示するだけ
+    console.log(data); setTimeout(()=>ok({no:'(お試し版のため未保存)'}),400);
+  }
+}
+// 合言葉から名前を表示
+function whoAmI(){
+  const c=getVal('合言葉'),box=document.querySelector('[data-k="合言葉"] .hint');
+  if(!c){box.textContent='一人ずつ配られた合言葉（一度入れるとこのスマホに記憶されます）';return;}
+  if(window.google&&google.script&&google.script.run) google.script.run.withSuccessHandler(n=>{box.innerHTML=n?'<b style="color:var(--acc)">'+esc(n)+' さんとして入力します</b>':'<b style="color:var(--warn)">合言葉が違います</b>';}).whoAmI(c);
+  else box.innerHTML='<b style="color:var(--acc)">（お試し）営業 山田 さんとして入力します</b>';
+}
+// 合言葉はこのスマホに記憶
+try{const pc=localStorage.getItem('shinki_pass');if(pc)setVal('合言葉',pc);}catch(e){}
+document.getElementsByName('合言葉')[0].addEventListener('change',e=>{try{localStorage.setItem('shinki_pass',e.target.value.trim());}catch(_){}whoAmI();});
+if(window.google&&google.script&&google.script.run) google.script.run.withSuccessHandler(a=>{$('#courses').innerHTML=(a||[]).map(c=>`<option value="${esc(c)}">`).join('');}).getCourses();
+whoAmI(); loadDraft(); if(getVal('GoogleマップURL'))showMapView({url:getVal('GoogleマップURL')}); applyIf();
+</script>
+
+<!-- ===================== 新規営業（名刺・営業記録） ===================== -->
+<style>
+  #tabs{position:sticky;top:0;z-index:6;display:flex;gap:6px;max-width:640px;margin:0 auto;padding:8px 12px 0;background:var(--bg)}
+  #tabs button{flex:1;font-size:15px;padding:10px;border:1px solid var(--line);border-radius:10px 10px 0 0;background:#fff;color:var(--sub)}
+  #tabs button.on{background:var(--acc);color:#fff;border-color:var(--acc);font-weight:bold}
+  #eigyo{max-width:640px;margin:0 auto;padding:12px 12px 120px}
+  #eigyo .big{display:block;width:100%;font-size:17px;padding:14px;margin:8px 0;border-radius:12px;border:1px solid var(--acc);background:var(--acc);color:#fff}
+  #eigyo .sub{background:#fff;color:var(--acc)}
+  #eigyo .row{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-top:1px solid var(--line);cursor:pointer}
+  #eigyo .row:first-child{border-top:0}
+  #eigyo .tag{font-size:12px;padding:2px 8px;border-radius:10px;background:var(--acc2);color:var(--acc);margin-left:6px;white-space:nowrap}
+  #eigyo .tag.A{background:#fde7e2;color:#b3401f}#eigyo .tag.見送り{background:#eee;color:#888}
+  #eigyo .rec{border-top:1px dashed var(--line);padding:10px 0;font-size:14px;white-space:pre-wrap}
+  #eigyo .warn{background:#fff4e5;border:1px solid #f0c48a;border-radius:10px;padding:10px;margin-top:10px;font-size:14px}
+  #eigyo img.card{max-width:100%;border-radius:8px;margin-top:8px}
+  #sugBox{border:1px solid var(--acc);border-radius:10px;margin-top:6px;background:#fff;overflow:hidden}
+  #sugBox div{padding:10px 12px;border-top:1px solid var(--line);font-size:15px}
+  #sugBox div:first-child{border-top:0}
+  #sugBox small{display:block;color:var(--sub);font-size:12px}
+  #eFoot{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 12px calc(10px + env(safe-area-inset-bottom));display:flex;gap:8px}
+  #eFoot button{flex:1;font-size:16px;padding:13px;border-radius:12px;border:1px solid var(--line);background:#fff}
+  #eFoot button.main{background:var(--acc);color:#fff;border-color:var(--acc);font-weight:bold}
+  #eFoot[hidden],#eigyo[hidden],#sugBox[hidden],#camBox[hidden]{display:none}
+  #camBox{position:fixed;inset:0;z-index:50;background:#000;color:#fff;display:flex;flex-direction:column}
+  #camTitle{padding:14px;font-size:16px;text-align:center}
+  #camVideo{flex:1;width:100%;object-fit:contain;background:#000;min-height:0}
+  #camVideo[hidden],#camShot[hidden],#camSkip[hidden],#camHint[hidden]{display:none}
+  #camHint{flex:1;padding:30px 20px;font-size:16px}
+  .camBtns{display:flex;flex-wrap:wrap;gap:8px;padding:12px 12px calc(12px + env(safe-area-inset-bottom))}
+  .camBtns button,.camBtns .lbtn{flex:1 1 40%;font-size:16px;padding:14px;border-radius:12px;border:1px solid #666;background:#222;color:#fff;text-align:center}
+  .camBtns .shoot{flex:1 1 100%;background:#fff;color:#000;font-weight:bold;font-size:18px}
+</style>
+<main id="eigyo" hidden></main>
+<div id="eFoot" hidden><button onclick="eHome()">一覧へ戻る</button><button class="main" onclick="eSave()">登録する</button></div>
+<div id="camBox" hidden><div id="camTitle"></div><video id="camVideo" playsinline muted></video>
+<div id="camHint" hidden>このスマホでは画面の中でカメラを使えません。下の「カメラで撮る」を押してください。</div>
+<div class="camBtns"><button id="camShot" class="shoot" onclick="camShot()">撮る</button>
+<label class="lbtn">カメラで撮る<input type="file" accept="image/*" capture="environment" onchange="camFile(this)" hidden></label>
+<label class="lbtn">写真から選ぶ<input type="file" accept="image/*" onchange="camFile(this)" hidden></label>
+<button id="camSkip" onclick="camDone('')">裏面なし</button><button onclick="camClose()">やめる</button></div></div>
+<script>
+// ----- タブ（新規申請／新規営業） -----
+(function(){
+  const nav=document.createElement('nav'); nav.id='tabs';
+  nav.innerHTML='<button data-t="s" class="on">新規申請</button><button data-t="e">新規営業</button>';
+  document.querySelector('header').after(nav);
+  nav.addEventListener('click',ev=>{const b=ev.target.closest('button');if(b)eTab(b.dataset.t);});
+  const h=document.createElement('input');h.type='hidden';h.name='営業先ID';document.getElementById('form').appendChild(h);
+})();
+function eTab(t){
+  document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  const e=t==='e';
+  document.getElementById('form').hidden=e; document.getElementById('foot').style.display=e?'none':'';
+  document.getElementById('eigyo').hidden=!e; document.getElementById('eFoot').hidden=true;
+  document.querySelector('header h1').textContent=e?'新規営業':'新規取引申請書';
+  if(e) eHome();
+  window.scrollTo(0,0);
+}
+const E={list:[],cur:null,img:'',second:false};
+const eCode=()=>getVal('合言葉')||(()=>{try{return localStorage.getItem('shinki_code')||'';}catch(e){return '';}})();
+const eRun=(fn,...a)=>new Promise((ok,ng)=>google.script.run.withSuccessHandler(ok).withFailureHandler(e=>ng(e))[fn](...a));
+const eEsc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const CF=[['会社名','text'],['フリガナ','text'],['部署','text'],['担当者名','text'],['役職','text'],['郵便番号','tel'],['住所','text'],['電話','tel'],['FAX','tel'],['携帯','tel'],['メール','email']];
+const RF=[
+ {h:'今日の営業の記録'},
+ {k:'訪問日',t:'date'},
+ {k:'話した内容',t:'area'},{k:'次にやること',t:'area'},{k:'次の訪問予定日',t:'date'},
+ {k:'見込み',t:'radio',o:['A（取れそう）','B（五分五分）','C（むずかしい）']},
+ {h:'今の弁当の様子'},
+ {k:'今の弁当業者',t:'text',l:'今どこの弁当か'},{k:'今の単価',t:'text',ph:'例：税込480円'},{k:'今の食数',t:'text',ph:'例：1日30食'},
+ {k:'今の特別食',t:'area',l:'今の特別食の内容'},{k:'不満・要望',t:'area'},
+ {h:'提案した内容'},
+ {k:'勧めた弁当',t:'text'},{k:'提案した単価',t:'text'},{k:'試食',t:'radio',o:['渡した','渡していない']},
+];
+function eField(k,t,val,label,ph,opts){
+  const id='e_'+k;
+  let inp;
+  if(t==='area') inp=`<textarea id="${id}">${eEsc(val)}</textarea>`;
+  else if(t==='radio') inp='<div class="chips">'+opts.map(o=>`<label><input type="radio" name="${id}" value="${eEsc(o)}"${val===o?' checked':''}><span>${eEsc(o)}</span></label>`).join('')+'</div>';
+  else inp=`<input type="${t}" id="${id}" value="${eEsc(val)}" placeholder="${eEsc(ph||'')}">`;
+  return `<div class="f"><label>${eEsc(label||k)}</label>${inp}</div>`;
+}
+function eVal(k){const r=document.querySelector(`input[name="e_${k}"]:checked`);if(r)return r.value;const el=document.getElementById('e_'+k);return el?el.value.trim():'';}
+async function eHome(){
+  E.cur=null;E.img='';E.second=false;
+  document.getElementById('eFoot').hidden=true;
+  const m=document.getElementById('eigyo');
+  const code=eCode();
+  if(!code){m.innerHTML=`<section><h2>合言葉</h2><div class="body"><div class="f"><label>自分の合言葉</label><input type="text" id="eCodeIn"></div><button class="big" onclick="eSetCode()">はじめる</button></div></section>`;return;}
+  m.innerHTML=`<button class="big" onclick="eShoot(false)">&#x1F4F7; 名刺を撮る（新しい会社）</button><button class="big sub" onclick="eEdit(null)">名刺なしで会社を登録する</button><section><h2>自分の営業先 <small id="eCnt"></small></h2><div class="body" id="eList"><div class="hint">読み込み中…</div></div></section>`;
+  try{
+    E.list=await eRun('eigyoList',code);
+    document.getElementById('eCnt').textContent=E.list.length+'件';
+    document.getElementById('eList').innerHTML=E.list.length?E.list.map((r,i)=>`<div class="row" onclick="eOpen('${eEsc(r.id)}')"><div><b>${eEsc(r.会社名)}</b><small style="display:block;color:var(--sub)">${eEsc(r.担当者名||'')}　最終訪問 ${eEsc(r.最終訪問日||'')}${r.営業担当?'　'+eEsc(r.営業担当):''}</small></div><div>${r.見込み?`<span class="tag ${eEsc(r.見込み.charAt(0))}">${eEsc(r.見込み.charAt(0))}</span>`:''}<span class="tag ${eEsc(r.状態)}">${eEsc(r.状態)}</span></div></div>`).join(''):'<div class="hint">まだありません。名刺を撮って登録してください。</div>';
+  }catch(e){document.getElementById('eList').innerHTML='<div class="hint">'+eEsc(e.message||e)+'</div>';}
+}
+function eSetCode(){const v=document.getElementById('eCodeIn').value.trim();if(!v)return;setVal('合言葉',v);try{localStorage.setItem('shinki_code',v);}catch(e){}saveDraft(false);eHome();}
+function eShoot(second){E.second=second;E.front=null;camOpen('表');}
+// ----- カメラ（その場で撮る。だめなときはスマホのカメラ／写真を選ぶ）-----
+let camStream=null, camSide='表';
+function camOpen(side){
+  camSide=side;
+  const b=document.getElementById('camBox');
+  document.getElementById('camTitle').textContent=side==='表'?'名刺の表面を撮ってください':'裏面を撮ってください（裏が白紙なら「裏面なし」）';
+  document.getElementById('camSkip').hidden=side==='表';
+  b.hidden=false;
+  if(camStream) return;
+  if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){camFallback();return;}
+  navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false})
+   .then(s=>{camStream=s;const v=document.getElementById('camVideo');v.srcObject=s;v.play();})
+   .catch(()=>camFallback());
+}
+function camFallback(){document.getElementById('camVideo').hidden=true;document.getElementById('camShot').hidden=true;document.getElementById('camHint').hidden=false;}
+function camClose(){if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null;}document.getElementById('camBox').hidden=true;document.getElementById('camVideo').hidden=false;document.getElementById('camShot').hidden=false;document.getElementById('camHint').hidden=true;}
+function camShot(){
+  const v=document.getElementById('camVideo'); if(!v.videoWidth) return;
+  const s=Math.min(1,1600/Math.max(v.videoWidth,v.videoHeight)),cv=document.createElement('canvas');
+  cv.width=v.videoWidth*s;cv.height=v.videoHeight*s;cv.getContext('2d').drawImage(v,0,0,cv.width,cv.height);
+  camGot(cv.toDataURL('image/jpeg',0.85));
+}
+function camFile(input){
+  const file=input.files[0]; input.value=''; if(!file) return;
+  const img=new Image();
+  img.onload=()=>{const s=Math.min(1,1600/Math.max(img.width,img.height)),cv=document.createElement('canvas');cv.width=img.width*s;cv.height=img.height*s;cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);camGot(cv.toDataURL('image/jpeg',0.85));};
+  img.src=URL.createObjectURL(file);
+}
+function camGot(data){
+  if(camSide==='表'){E.front=data;camOpen('裏');toast('表面を撮りました。次は裏面です');}
+  else camDone(data);
+}
+async function camDone(back){
+  camClose();
+  const front=E.front; if(!front) return;
+  toast('名刺を読み取っています…（10〜20秒）');
+  try{
+    const r=await eRun('eigyoOcr',eCode(),front,back||'');
+    E.img=r.imageUrl;
+    if(E.second&&E.cur){ E.pendingSecond={}; ['担当者名','役職','部署','携帯','メール'].forEach(k=>{ if(r.fields[k]&&r.fields[k]!==E.cur[k]) E.pendingSecond[k]=r.fields[k]; }); CF.forEach(([k])=>{ if(r.fields[k]&&['担当者名','役職','部署','携帯','メール'].includes(k)) { const el=document.getElementById('e_'+k); if(el&&!el.value) el.value=r.fields[k]; } }); eShowCard(front,true,back); toast('2枚目の名刺を読み取りました。内容を確かめてください'); }
+    else { eEdit(null,r.fields,front,null,back); toast('読み取りました。まちがいを直してから登録してください'); }
+  }catch(e){toast('読み取れませんでした：'+(e.message||e)); if(!E.second) eEdit(null,{},front,null,back);}
+}
+function eShowCard(data,second,back){const b=document.getElementById('eCard');if(b)b.innerHTML=(second?'<div class="hint">2枚目の名刺（別の担当者などはメモに残ります）</div>':'')+`<img class="card" src="${data}">`+(back?`<img class="card" src="${back}">`:'');}
+async function eOpen(id){
+  try{ const r=await eRun('eigyoGet',eCode(),id); eEdit(r.company,null,null,r.records); }
+  catch(e){toast(e.message||e);}
+}
+function eEdit(company,fields,img,records,back){
+  E.cur=company;
+  const v=Object.assign({},fields||{},company||{});
+  const m=document.getElementById('eigyo');
+  const today=new Date(Date.now()+9*3600e3).toISOString().slice(0,10);
+  m.innerHTML=
+   `<section><h2>${company?eEsc(company.会社名):'会社の情報'}<small>${company?eEsc(company.状態):'名刺の読み取り結果を確かめてください'}</small></h2><div class="body">
+     <div id="eCard">${img?`<img class="card" src="${img}">`:''}${back?`<img class="card" src="${back}">`:''}</div>
+     ${company?`<button class="big sub" onclick="eShoot(true)">&#x1F4F7; 名刺をもう1枚撮る</button>`:''}
+     ${CF.map(([k,t])=>eField(k,t,v[k]||'')).join('')}
+     <div id="eDup"></div>
+     ${company?eField('状態','radio',company.状態,'状態',null,['訪問済み','申請中','契約済み','見送り']):''}
+     ${company&&company.状態!=='契約済み'?`<button class="big sub" onclick="eToShinsei()">この会社で新規取引申請書を作る</button>`:''}
+   </div></section>
+   <section><h2>今日の営業の記録</h2><div class="body">${RF.map(f=>f.h?(f.h==='今日の営業の記録'?'':`<h3 style="font-size:15px;color:var(--acc);margin:18px 0 0">${f.h}</h3>`):eField(f.k,f.t,f.k==='訪問日'?today:'',f.l,f.ph,f.o)).join('')}</div></section>
+   ${records&&records.length?`<section><h2>これまでの記録<small>${records.length}回</small></h2><div class="body">${records.map(r=>`<div class="rec"><b>${eEsc(r.訪問日)}</b>　${eEsc(r.見込み||'')}　${eEsc(r.営業担当||'')}\n${['話した内容','次にやること','次の訪問予定日','今の弁当業者','今の単価','今の食数','今の特別食','不満・要望','勧めた弁当','提案した単価','試食'].filter(k=>r[k]).map(k=>k+'：'+eEsc(r[k])).join('\n')}</div>`).join('')}</div></section>`:''}`;
+  document.getElementById('eFoot').hidden=false;
+  const nameEl=document.getElementById('e_会社名');
+  if(!company){ nameEl.addEventListener('change',eDup); if(v.会社名) eDup(); }
+  window.scrollTo(0,0);
+}
+async function eDup(){
+  const n=eVal('会社名'), box=document.getElementById('eDup'); if(!box) return;
+  box.innerHTML='';
+  if(n.length<2) return;
+  try{
+    const r=await eRun('eigyoClassify',eCode(),n);
+    let h='';
+    if(r.torihiki&&r.torihiki.length) h+='<div class="warn" style="background:#fde7e2;border-color:#e8a08f"><b>もう取引がある得意先かもしれません</b><br>'+r.torihiki.map(x=>`${eEsc(x.顧客名)}（${eEsc(x.コース)}）`).join('<br>')+'<div class="hint">同じ会社なら、営業先として登録しなくて大丈夫です。別の事業所などなら、そのまま登録してください。</div></div>';
+    if(!h&&!r.mine.length&&!r.others.length) h='<div class="warn" style="background:#e7f2ec;border-color:#9cc9b2">取引も営業先リストもない、新しい会社です。</div>';
+    if(r.mine.length) h+='<div class="warn">似た会社がもう登録されています。同じ会社なら選んでください（記録と名刺がその会社に足されます）。'+r.mine.map(x=>`<button class="big sub" onclick="eMerge('${eEsc(x.id)}')">${eEsc(x.会社名)}${x.担当者名?'（'+eEsc(x.担当者名)+'）':''} に足す</button>`).join('')+'<div class="hint">別の会社なら、そのまま登録してください。</div></div>';
+    if(r.others.length) h+='<div class="warn">'+r.others.map(x=>`「${eEsc(x.会社名)}」は ${eEsc(x.営業担当)}さんが登録済みです。`).join('<br>')+'<br>同じ会社なら、先に相談してください。</div>';
+    box.innerHTML=h;
+  }catch(e){}
+}
+async function eMerge(id){
+  const keep={};CF.forEach(([k])=>keep[k]=eVal(k));const img=E.img;
+  const r=await eRun('eigyoGet',eCode(),id);
+  E.second=true; E.img=img;
+  eEdit(r.company,null,null,r.records);
+  CF.forEach(([k])=>{const el=document.getElementById('e_'+k); if(el&&!el.value&&keep[k]) el.value=keep[k];});
+  E.pendingSecond={};['担当者名','役職','部署','携帯','メール'].forEach(k=>{ if(keep[k]&&keep[k]!==r.company[k]) E.pendingSecond[k]=keep[k]; });
+  toast('「'+r.company.会社名+'」に足します。記録を書いて登録してください');
+}
+async function eSave(){
+  const company={};CF.forEach(([k])=>company[k]=eVal(k));
+  if(!company.会社名){toast('会社名を入れてください');return;}
+  const record={};RF.forEach(f=>{if(f.k)record[f.k]=eVal(f.k);});
+  const p={id:E.cur?E.cur.営業先ID:'',company:company,record:record,imageUrl:E.img||''};
+  if(E.cur&&eVal('状態')&&eVal('状態')!==E.cur.状態) p['状態']=eVal('状態');
+  if(E.cur&&E.second){ p.secondCard=true; if(E.pendingSecond) Object.assign(p.company,E.pendingSecond); }
+  const btn=document.querySelector('#eFoot .main'); btn.disabled=true; btn.textContent='登録中…';
+  try{ await eRun('eigyoSave',eCode(),p); E.pendingSecond=null; toast('登録しました'); eHome(); }
+  catch(e){ toast('登録できませんでした：'+(e.message||e)); }
+  finally{ btn.disabled=false; btn.textContent='登録する'; }
+}
+function eToShinsei(){
+  const c={};CF.forEach(([k])=>c[k]=eVal(k));
+  eTab('s'); eFillShinsei(Object.assign({営業先ID:E.cur.営業先ID},c));
+}
+function eFillShinsei(c){
+  const map={'得意先名':'会社名','フリガナ':'フリガナ','得意先担当者':'担当者名','役職':'役職','TEL':'電話','FAX':'FAX','納品先郵便番号':'郵便番号','納品先住所':'住所'};
+  Object.entries(map).forEach(([to,from])=>{ if(c[from]) setVal(to,c[from]); });
+  setVal('営業先ID',c.営業先ID||c['営業先ID']||'');
+  applyIf(); saveDraft(false);
+  toast('営業先リストの内容を入れました。地図・停車位置などを足してください');
+}
+// ----- 申請書の得意先名：2〜3文字で営業先リストから候補 -----
+(function(){
+  const inp=document.getElementsByName('得意先名')[0]; if(!inp) return;
+  const box=document.createElement('div'); box.id='sugBox'; box.hidden=true; inp.after(box);
+  let t=null, hits=[];
+  inp.addEventListener('input',()=>{
+    setVal('営業先ID','');
+    clearTimeout(t); const q=inp.value.trim(); if(q.length<2){box.hidden=true;return;}
+    t=setTimeout(async()=>{
+      try{
+        hits=await eRun('eigyoSuggest',eCode(),q);
+        if(!hits.length){box.hidden=true;return;}
+        box.innerHTML='<div style="background:var(--acc2);font-size:13px;color:var(--acc)">営業先リストから選ぶ</div>'+hits.map((h,i)=>`<div data-i="${i}"><b>${eEsc(h.会社名)}</b><small>${eEsc([h.担当者名,h.住所].filter(Boolean).join('　'))}</small></div>`).join('');
+        box.hidden=false;
+      }catch(e){box.hidden=true;}
+    },400);
+  });
+  box.addEventListener('click',ev=>{const d=ev.target.closest('[data-i]');if(!d)return;eFillShinsei(hits[+d.dataset.i]);box.hidden=true;});
+  document.addEventListener('click',ev=>{if(!box.contains(ev.target)&&ev.target!==inp)box.hidden=true;});
+})();
+</script>
+</body>
+</html>
