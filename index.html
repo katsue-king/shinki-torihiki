@@ -460,8 +460,16 @@ whoAmI(); loadDraft(); if(getVal('GoogleマップURL'))showMapView({url:getVal('
   .camBtns{display:flex;flex-wrap:wrap;gap:8px;padding:12px 12px calc(12px + env(safe-area-inset-bottom))}
   .camBtns button,.camBtns .lbtn{flex:1 1 40%;font-size:16px;padding:14px;border-radius:12px;border:1px solid #666;background:#222;color:#fff;text-align:center}
   .camBtns .shoot{flex:1 1 100%;background:#fff;color:#000;font-weight:bold;font-size:18px}
+  #eigyo .mcard{border-top:1px solid var(--line);padding:10px 0;font-size:14px}
+  #eigyo .mcard:first-child{border-top:0}
+  #eigyo .mthumbs{display:flex;gap:6px;margin-bottom:6px}
+  #eigyo .mthumbs img{width:48%;border-radius:6px;border:1px solid var(--line);cursor:zoom-in}
+  #bigBox{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.9);display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px}
+  #bigBox[hidden]{display:none}
+  #bigBox img{max-width:100%;max-height:100%}
 </style>
 <main id="eigyo" hidden></main>
+<div id="bigBox" hidden onclick="this.hidden=true"></div>
 <div id="eFoot" hidden><button onclick="eHome()">一覧へ戻る</button><button class="main" onclick="eSave()">登録する</button></div>
 <div id="camBox" hidden><div id="camTitle"></div><video id="camVideo" playsinline muted></video>
 <div id="camHint" hidden>このスマホでは画面の中でカメラを使えません。下の「カメラで撮る」を押してください。</div>
@@ -487,7 +495,8 @@ function eTab(t){
   if(e) eHome();
   window.scrollTo(0,0);
 }
-const E={list:[],cur:null,img:'',second:false};
+const E={list:[],cur:null,img:'',second:false,card:null};
+const P2=['部署','担当者名','役職','電話','携帯','メール'];
 const eCode=()=>getVal('合言葉')||(()=>{try{return localStorage.getItem('shinki_code')||'';}catch(e){return '';}})();
 const eRun=(fn,...a)=>new Promise((ok,ng)=>google.script.run.withSuccessHandler(ok).withFailureHandler(e=>ng(e))[fn](...a));
 const eEsc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -513,12 +522,12 @@ function eField(k,t,val,label,ph,opts){
 }
 function eVal(k){const r=document.querySelector(`input[name="e_${k}"]:checked`);if(r)return r.value;const el=document.getElementById('e_'+k);return el?el.value.trim():'';}
 async function eHome(){
-  E.cur=null;E.img='';E.second=false;
+  E.cur=null;E.img='';E.second=false;E.card=null;
   document.getElementById('eFoot').hidden=true;
   const m=document.getElementById('eigyo');
   const code=eCode();
   if(!code){m.innerHTML=`<section><h2>合言葉</h2><div class="body"><div class="f"><label>自分の合言葉</label><input type="text" id="eCodeIn"></div><button class="big" onclick="eSetCode()">はじめる</button></div></section>`;return;}
-  m.innerHTML=`<button class="big" onclick="eShoot(false)">&#x1F4F7; 名刺を撮る（新しい会社）</button><button class="big sub" onclick="eEdit(null)">名刺なしで会社を登録する</button><section><h2>自分の営業先 <small id="eCnt"></small></h2><div class="body" id="eList"><div class="hint">読み込み中…</div></div></section>`;
+  m.innerHTML=`<button class="big" onclick="eShoot(false)">&#x1F4F7; 名刺を撮る（新しい会社）</button><button class="big sub" onclick="eEdit(null)">名刺なしで会社を登録する</button><button class="big sub" onclick="eCardList()">&#x1F4C7; 名刺一覧・さがす</button><section><h2>自分の営業先 <small id="eCnt"></small></h2><div class="body" id="eList"><div class="hint">読み込み中…</div></div></section>`;
   try{
     E.list=await eRun('eigyoList',code);
     document.getElementById('eCnt').textContent=E.list.length+'件';
@@ -565,17 +574,37 @@ async function camDone(back){
   toast('名刺を読み取っています…（10〜20秒）');
   try{
     const r=await eRun('eigyoOcr',eCode(),front,back||'');
-    E.img=r.imageUrl;
-    if(E.second&&E.cur){ E.pendingSecond={}; ['担当者名','役職','部署','携帯','メール'].forEach(k=>{ if(r.fields[k]&&r.fields[k]!==E.cur[k]) E.pendingSecond[k]=r.fields[k]; }); CF.forEach(([k])=>{ if(r.fields[k]&&['担当者名','役職','部署','携帯','メール'].includes(k)) { const el=document.getElementById('e_'+k); if(el&&!el.value) el.value=r.fields[k]; } }); eShowCard(front,true,back); toast('2枚目の名刺を読み取りました。内容を確かめてください'); }
+    E.img=r.imageUrl; E.card={front:r.front,back:r.back||'',frontId:r.frontId,backId:r.backId||''}; E.fData=front; E.bData=back||'';
+    if(E.second&&E.cur){ eShowSecond(front,back,r.fields); toast('2枚目の名刺を読み取りました。内容を確かめてください'); }
     else { eEdit(null,r.fields,front,null,back); toast('読み取りました。まちがいを直してから登録してください'); }
   }catch(e){toast('読み取れませんでした：'+(e.message||e)); if(!E.second) eEdit(null,{},front,null,back);}
 }
-function eShowCard(data,second,back){const b=document.getElementById('eCard');if(b)b.innerHTML=(second?'<div class="hint">2枚目の名刺（別の担当者などはメモに残ります）</div>':'')+`<img class="card" src="${data}">`+(back?`<img class="card" src="${back}">`:'');}
+function eShowSecond(front,back,f){
+  const b=document.getElementById('eCard'); if(!b) return; f=f||{};
+  b.innerHTML='<div class="warn" style="background:#eef4fb;border-color:#a9c4e4"><b>この会社の名刺を足します</b><div class="mthumbs" style="margin-top:8px">'+(front?`<img src="${front}">`:'')+(back?`<img src="${back}">`:'')+'</div>'+P2.map(k=>`<div class="f"><label>${k}（この名刺）</label><input type="${/電話|携帯/.test(k)?'tel':k==='メール'?'email':'text'}" id="e2_${k}" value="${eEsc(f[k]||'')}"></div>`).join('')+'</div>';
+}
+async function eBig(fid){
+  if(!fid) return; const bx=document.getElementById('bigBox'); bx.innerHTML='読み込み中…'; bx.hidden=false;
+  try{ const u=await eRun('eigyoCardImage',eCode(),fid); bx.innerHTML=`<img src="${u}">`; }catch(e){ bx.innerHTML=eEsc(e.message||e); }
+}
+function eCardsHtml(cards){
+  if(!cards||!cards.length) return '';
+  return `<section><h2>名刺<small>${cards.length}枚</small></h2><div class="body">`+cards.map(c=>`<div class="mcard"><div class="mthumbs">${c.frontThumb?`<img src="${c.frontThumb}" onclick="eBig('${eEsc(c.frontId)}')">`:''}${c.backThumb?`<img src="${c.backThumb}" onclick="eBig('${eEsc(c.backId)}')">`:''}</div><b>${eEsc(c.担当者名||'（名前なし）')}</b> ${eEsc([c.部署,c.役職].filter(Boolean).join(' '))}<small style="display:block;color:var(--sub)">${eEsc([c.携帯&&'携帯 '+c.携帯,c.電話&&'電話 '+c.電話,c.メール].filter(Boolean).join('　'))}</small><small style="display:block;color:var(--sub)">もらった日 ${eEsc(c.もらった日)}　${eEsc(c.営業担当)}</small></div>`).join('')+'</div></section>';
+}
+async function eCardList(){
+  document.getElementById('eFoot').hidden=true;
+  const m=document.getElementById('eigyo');
+  m.innerHTML=`<button class="big sub" onclick="eHome()">← 戻る</button><section><h2>名刺一覧</h2><div class="body"><div class="f"><label>名前・会社名でさがす</label><input type="search" id="eCardQ" placeholder="例：山田、テスト精工"></div><div id="eCardRes"><div class="hint">読み込み中…</div></div></div></section>`;
+  const q=document.getElementById('eCardQ'); let t=null;
+  const load=async()=>{ const box=document.getElementById('eCardRes'); try{ const r=await eRun('eigyoCards',eCode(),q.value.trim()); box.innerHTML=r.length?r.map(c=>`<div class="row" onclick="eOpen('${eEsc(c.id)}')"><div><b>${eEsc(c.担当者名||'（名前なし）')}</b> <small>${eEsc(c.役職||'')}</small><small style="display:block;color:var(--sub)">${eEsc(c.会社名)}　${eEsc(c.携帯||c.電話||'')}</small></div><small style="color:var(--sub)">${eEsc(c.もらった日)}</small></div>`).join(''):'<div class="hint">見つかりません</div>'; }catch(e){ box.innerHTML='<div class="hint">'+eEsc(e.message||e)+'</div>'; } };
+  q.addEventListener('input',()=>{clearTimeout(t);t=setTimeout(load,400);});
+  load(); window.scrollTo(0,0);
+}
 async function eOpen(id){
-  try{ const r=await eRun('eigyoGet',eCode(),id); eEdit(r.company,null,null,r.records); }
+  try{ const r=await eRun('eigyoGet',eCode(),id); eEdit(r.company,null,null,r.records,null,r.cards); }
   catch(e){toast(e.message||e);}
 }
-function eEdit(company,fields,img,records,back){
+function eEdit(company,fields,img,records,back,cards){
   E.cur=company;
   const v=Object.assign({},fields||{},company||{});
   const m=document.getElementById('eigyo');
@@ -589,6 +618,7 @@ function eEdit(company,fields,img,records,back){
      ${company?eField('状態','radio',company.状態,'状態',null,['訪問済み','申請中','契約済み','見送り']):''}
      ${company&&company.状態!=='契約済み'?`<button class="big sub" onclick="eToShinsei()">この会社で新規取引申請書を作る</button>`:''}
    </div></section>
+   ${eCardsHtml(cards)}
    <section><h2>今日の営業の記録</h2><div class="body">${RF.map(f=>f.h?(f.h==='今日の営業の記録'?'':`<h3 style="font-size:15px;color:var(--acc);margin:18px 0 0">${f.h}</h3>`):eField(f.k,f.t,f.k==='訪問日'?today:'',f.l,f.ph,f.o)).join('')}</div></section>
    ${records&&records.length?`<section><h2>これまでの記録<small>${records.length}回</small></h2><div class="body">${records.map(r=>`<div class="rec"><b>${eEsc(r.訪問日)}</b>　${eEsc(r.見込み||'')}　${eEsc(r.営業担当||'')}\n${['話した内容','次にやること','次の訪問予定日','今の弁当業者','今の単価','今の食数','今の特別食','不満・要望','勧めた弁当','提案した単価','試食'].filter(k=>r[k]).map(k=>k+'：'+eEsc(r[k])).join('\n')}</div>`).join('')}</div></section>`:''}`;
   document.getElementById('eFoot').hidden=false;
@@ -611,12 +641,12 @@ async function eDup(){
   }catch(e){}
 }
 async function eMerge(id){
-  const keep={};CF.forEach(([k])=>keep[k]=eVal(k));const img=E.img;
+  const keep={};CF.forEach(([k])=>keep[k]=eVal(k));const img=E.img,card=E.card,fd=E.fData,bd=E.bData;
   const r=await eRun('eigyoGet',eCode(),id);
-  E.second=true; E.img=img;
-  eEdit(r.company,null,null,r.records);
+  eEdit(r.company,null,null,r.records,null,r.cards);
+  E.second=true; E.img=img; E.card=card;
   CF.forEach(([k])=>{const el=document.getElementById('e_'+k); if(el&&!el.value&&keep[k]) el.value=keep[k];});
-  E.pendingSecond={};['担当者名','役職','部署','携帯','メール'].forEach(k=>{ if(keep[k]&&keep[k]!==r.company[k]) E.pendingSecond[k]=keep[k]; });
+  if(card) eShowSecond(fd,bd,keep);
   toast('「'+r.company.会社名+'」に足します。記録を書いて登録してください');
 }
 async function eSave(){
@@ -625,9 +655,10 @@ async function eSave(){
   const record={};RF.forEach(f=>{if(f.k)record[f.k]=eVal(f.k);});
   const p={id:E.cur?E.cur.営業先ID:'',company:company,record:record,imageUrl:E.img||''};
   if(E.cur&&eVal('状態')&&eVal('状態')!==E.cur.状態) p['状態']=eVal('状態');
-  if(E.cur&&E.second){ p.secondCard=true; if(E.pendingSecond) Object.assign(p.company,E.pendingSecond); }
+  if(E.card){ const info={}; P2.forEach(k=>{ const el=document.getElementById('e2_'+k); info[k]=el?el.value.trim():(company[k]||''); }); p.card=Object.assign({},E.card,{info:info}); }
+  if(E.cur&&E.second) p.secondCard=true;
   const btn=document.querySelector('#eFoot .main'); btn.disabled=true; btn.textContent='登録中…';
-  try{ await eRun('eigyoSave',eCode(),p); E.pendingSecond=null; toast('登録しました'); eHome(); }
+  try{ await eRun('eigyoSave',eCode(),p); toast('登録しました'); eHome(); }
   catch(e){ toast('登録できませんでした：'+(e.message||e)); }
   finally{ btn.disabled=false; btn.textContent='登録する'; }
 }
