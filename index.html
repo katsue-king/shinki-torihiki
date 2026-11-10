@@ -467,6 +467,11 @@ whoAmI(); loadDraft(); if(getVal('GoogleマップURL'))showMapView({url:getVal('
   #bigBox{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.9);display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px}
   #bigBox[hidden]{display:none}
   #bigBox img{max-width:100%;max-height:100%}
+  #eigyo .nday{display:flex;gap:6px;align-items:center}
+  #eigyo .nday input{flex:1}
+  #eigyo .nday button{font-size:15px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:#fff}
+  #eigyo .nrec{border-top:1px dashed var(--line);padding:8px 0;font-size:14px;cursor:pointer}
+  @media print{ header,#tabs,#eFoot,#eigyo .big,#eigyo .nday,.noprint{display:none!important} #eigyo{padding:0} #eigyo section{break-inside:avoid;border:1px solid #999} body{background:#fff} }
 </style>
 <main id="eigyo" hidden></main>
 <div id="bigBox" hidden onclick="this.hidden=true"></div>
@@ -527,7 +532,7 @@ async function eHome(){
   const m=document.getElementById('eigyo');
   const code=eCode();
   if(!code){m.innerHTML=`<section><h2>合言葉</h2><div class="body"><div class="f"><label>自分の合言葉</label><input type="text" id="eCodeIn"></div><button class="big" onclick="eSetCode()">はじめる</button></div></section>`;return;}
-  m.innerHTML=`<button class="big" onclick="eShoot(false)">&#x1F4F7; 名刺を撮る（新しい会社）</button><button class="big sub" onclick="eEdit(null)">名刺なしで会社を登録する</button><button class="big sub" onclick="eCardList()">&#x1F4C7; 名刺一覧・さがす</button><section><h2>自分の営業先 <small id="eCnt"></small></h2><div class="body" id="eList"><div class="hint">読み込み中…</div></div></section>`;
+  m.innerHTML=`<button class="big" onclick="eShoot(false)">&#x1F4F7; 名刺を撮る（新しい会社）</button><button class="big sub" onclick="eEdit(null)">名刺なしで会社を登録する</button><button class="big sub" onclick="eCardList()">&#x1F4C7; 名刺一覧・さがす</button><button class="big sub" onclick="eNippo()">&#x1F4CB; 日報</button><section><h2>自分の営業先 <small id="eCnt"></small></h2><div class="body" id="eList"><div class="hint">読み込み中…</div></div></section>`;
   try{
     E.list=await eRun('eigyoList',code);
     document.getElementById('eCnt').textContent=E.list.length+'件';
@@ -574,9 +579,9 @@ async function camDone(back){
   toast('名刺を読み取っています…（10〜20秒）');
   try{
     const r=await eRun('eigyoOcr',eCode(),front,back||'');
-    E.img=r.imageUrl; E.card={front:r.front,back:r.back||'',frontId:r.frontId,backId:r.backId||''}; E.fData=front; E.bData=back||'';
+    E.img=r.imageUrl; E.card={front:r.front,back:r.back||'',frontId:r.frontId,backId:r.backId||'',meishiId:r.meishiId||''}; E.fData=front; E.bData=back||'';
     if(E.second&&E.cur){ eShowSecond(front,back,r.fields); toast('2枚目の名刺を読み取りました。内容を確かめてください'); }
-    else { eEdit(null,r.fields,front,null,back); toast('読み取りました。まちがいを直してから登録してください'); }
+    else { eEdit(null,r.fields,front,null,back); toast('読み取りました（名刺一覧にも入りました）。まちがいを直してから登録してください'); }
   }catch(e){toast('読み取れませんでした：'+(e.message||e)); if(!E.second) eEdit(null,{},front,null,back);}
 }
 function eShowSecond(front,back,f){
@@ -591,12 +596,43 @@ function eCardsHtml(cards){
   if(!cards||!cards.length) return '';
   return `<section><h2>名刺<small>${cards.length}枚</small></h2><div class="body">`+cards.map(c=>`<div class="mcard"><div class="mthumbs">${c.frontThumb?`<img src="${c.frontThumb}" onclick="eBig('${eEsc(c.frontId)}')">`:''}${c.backThumb?`<img src="${c.backThumb}" onclick="eBig('${eEsc(c.backId)}')">`:''}</div><b>${eEsc(c.担当者名||'（名前なし）')}</b> ${eEsc([c.部署,c.役職].filter(Boolean).join(' '))}<small style="display:block;color:var(--sub)">${eEsc([c.携帯&&'携帯 '+c.携帯,c.電話&&'電話 '+c.電話,c.メール].filter(Boolean).join('　'))}</small><small style="display:block;color:var(--sub)">もらった日 ${eEsc(c.もらった日)}　${eEsc(c.営業担当)}</small></div>`).join('')+'</div></section>';
 }
+let nDay='';
+async function eNippo(day){
+  document.getElementById('eFoot').hidden=true;
+  const today=new Date(Date.now()+9*3600e3).toISOString().slice(0,10);
+  nDay=day||nDay||today;
+  const m=document.getElementById('eigyo');
+  m.innerHTML=`<button class="big sub" onclick="eHome()">← 戻る</button><section><h2>営業日報</h2><div class="body"><div class="nday"><button onclick="eNippoMove(-1)">◀ 前の日</button><input type="date" id="nDayIn" value="${nDay}" onchange="eNippo(this.value)"><button onclick="eNippoMove(1)">次の日 ▶</button></div></div></section><div id="nRes"><div class="hint">読み込み中…</div></div><button class="big sub noprint" onclick="window.print()">&#x1F5A8; 印刷する</button>`;
+  try{
+    const r=await eRun('eigyoNippo',eCode(),nDay.replace(/-/g,'/'));
+    const tot=r.groups.reduce((a,g)=>a+g.recs.length,0);
+    document.getElementById('nRes').innerHTML=`<div class="hint" style="margin:6px 2px">${eEsc(r.day)}　訪問 ${tot}件</div>`+(r.groups.length?r.groups.map(g=>`<section><h2>${eEsc(g.name)}<small>${g.recs.length?'訪問'+g.recs.length+'件':'記録なし'}${g.newCompanies?'・新しい会社'+g.newCompanies:''}${g.cards?'・名刺'+g.cards+'枚':''}</small></h2><div class="body">${g.recs.map(x=>`<div class="nrec" onclick="eOpen('${eEsc(x.id)}')"><b>${eEsc(x.会社名)}</b>${x.見込み?`<span class="tag ${eEsc(x.見込み.charAt(0))}">${eEsc(x.見込み.charAt(0))}</span>`:''}${x.新規?'<span class="tag">新</span>':''}${['話した内容','次にやること','次の訪問予定日','今の弁当業者','提案した単価','試食'].filter(k=>x[k]).map(k=>`<div style="white-space:pre-wrap"><small style="color:var(--sub)">${k}</small>　${eEsc(x[k])}</div>`).join('')}</div>`).join('')||'<div class="hint">この日の営業の記録はありません</div>'}</div></section>`).join(''):'<div class="hint">この日の営業の記録はありません</div>');
+  }catch(e){document.getElementById('nRes').innerHTML='<div class="hint">'+eEsc(e.message||e)+'</div>';}
+  window.scrollTo(0,0);
+}
+function eNippoMove(n){const d=new Date(nDay+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+n);eNippo(d.toISOString().slice(0,10));}
+// 日報のLINEのリンク（?nippo=1&k=合言葉）から開いたとき
+(function(){
+  const q=new URLSearchParams(location.search);
+  if(!q.get('nippo')) return;
+  const k=q.get('k'); if(k){ setVal('合言葉',k); try{localStorage.setItem('shinki_code',k);}catch(e){} }
+  setTimeout(()=>{ eTab('e'); eNippo(); },300);
+})();
+async function eOpenCard(mid){
+  toast('名刺を開いています…');
+  try{
+    const r=await eRun('eigyoCardGet',eCode(),mid);
+    E.second=false; E.img=r.imageUrl; E.card={front:r.front,back:r.back||'',frontId:r.frontId,backId:r.backId||'',meishiId:r.meishiId}; E.fData=r.frontData; E.bData=r.backData||'';
+    eEdit(null,r.fields,r.frontData,null,r.backData||'');
+    toast('まちがいを直してから登録してください');
+  }catch(e){toast(e.message||e);}
+}
 async function eCardList(){
   document.getElementById('eFoot').hidden=true;
   const m=document.getElementById('eigyo');
   m.innerHTML=`<button class="big sub" onclick="eHome()">← 戻る</button><section><h2>名刺一覧</h2><div class="body"><div class="f"><label>名前・会社名でさがす</label><input type="search" id="eCardQ" placeholder="例：山田、テスト精工"></div><div id="eCardRes"><div class="hint">読み込み中…</div></div></div></section>`;
   const q=document.getElementById('eCardQ'); let t=null;
-  const load=async()=>{ const box=document.getElementById('eCardRes'); try{ const r=await eRun('eigyoCards',eCode(),q.value.trim()); box.innerHTML=r.length?r.map(c=>`<div class="row" onclick="eOpen('${eEsc(c.id)}')"><div><b>${eEsc(c.担当者名||'（名前なし）')}</b> <small>${eEsc(c.役職||'')}</small><small style="display:block;color:var(--sub)">${eEsc(c.会社名)}　${eEsc(c.携帯||c.電話||'')}</small></div><small style="color:var(--sub)">${eEsc(c.もらった日)}</small></div>`).join(''):'<div class="hint">見つかりません</div>'; }catch(e){ box.innerHTML='<div class="hint">'+eEsc(e.message||e)+'</div>'; } };
+  const load=async()=>{ const box=document.getElementById('eCardRes'); try{ const r=await eRun('eigyoCards',eCode(),q.value.trim()); box.innerHTML=r.length?r.map(c=>`<div class="row" onclick="${c.id?`eOpen('${eEsc(c.id)}')`:`eOpenCard('${eEsc(c.mid)}')`}"><div>${c.状態==='未登録'?'<span class="tag A" style="margin:0 6px 0 0">未登録</span>':''}<b>${eEsc(c.担当者名||'（名前なし）')}</b> <small>${eEsc(c.役職||'')}</small><small style="display:block;color:var(--sub)">${eEsc(c.会社名)}　${eEsc(c.携帯||c.電話||'')}</small></div><small style="color:var(--sub)">${eEsc(c.もらった日)}</small></div>`).join(''):'<div class="hint">見つかりません</div>'; }catch(e){ box.innerHTML='<div class="hint">'+eEsc(e.message||e)+'</div>'; } };
   q.addEventListener('input',()=>{clearTimeout(t);t=setTimeout(load,400);});
   load(); window.scrollTo(0,0);
 }
