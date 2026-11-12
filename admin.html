@@ -29,6 +29,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>新規取引申請 確認・承認</title>
+<link rel="apple-touch-icon" href="icon-admin-180.png">
+<link rel="icon" type="image/png" href="icon-admin-192.png">
+<link rel="manifest" href="manifest-admin.json">
+<meta name="theme-color" content="#1565c0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="新規 承認">
 <style>
   :root{--bg:#f4f5f2;--card:#fff;--ink:#1d2320;--sub:#66706b;--line:#d9ddd8;--acc:#1f6b4f;--acc2:#e7f2ec;--warn:#b3401f;--wait:#a36a00}
   *{box-sizing:border-box}
@@ -88,7 +94,7 @@
 <script>
 const $=s=>document.querySelector(s), esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const GAS=window.google&&google.script&&google.script.run;
-let CODE='', ROWS=[], rejNo='';
+let CODE='', ROWS=[], rejNo='', STAFFREQ=[];
 try{CODE=localStorage.getItem('adm')||sessionStorage.getItem('adm')||'';}catch(e){}
 function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',3500);}
 function call(fn,args,ok){
@@ -130,11 +136,17 @@ function card(r){
 }
 function render(){
   const w=ROWS.filter(r=>r._mine), d=ROWS.filter(r=>!r._mine);
-  $('#app').innerHTML=`<h3>あなたの番 ${w.length}件</h3>`+(w.length?w.map(card).join(''):'<div class="empty">いま対応する申請はありません</div>')+
+  $('#app').innerHTML=(STAFFREQ.length?`<h3>合言葉の申し込み ${STAFFREQ.length}件</h3>`+STAFFREQ.map(s=>`<div class="card" style="padding:12px 14px"><b>${esc(s.name)}</b>（${esc(s.role)}）<div class="act"><span class="grow"></span><button class="ng" onclick="staffDecide(${s.row},false)">見送る</button><button class="main" onclick="staffDecide(${s.row},true)">承認する</button></div></div>`).join(''):'')+`<h3>あなたの番 ${w.length}件</h3>`+(w.length?w.map(card).join(''):'<div class="empty">いま対応する申請はありません</div>')+
     (d.length?`<h3>その他・最近の申請</h3>`+d.map(card).join(''):'')+`<p style="text-align:center"><button onclick="load()">更新</button></p>`;
 }
 function load(){
-  call('adminList',[CODE],r=>{try{localStorage.setItem('adm',CODE);sessionStorage.setItem('adm',CODE);}catch(e){}$('#me').textContent=r.me+' さん';FLOW=r.flow||{};ROWS=r.rows;render();});
+  call('adminList',[CODE],r=>{try{localStorage.setItem('adm',CODE);sessionStorage.setItem('adm',CODE);}catch(e){}$('#me').textContent=r.me+' さん';FLOW=r.flow||{};ROWS=r.rows;render();
+    if(GAS) google.script.run.withSuccessHandler(q=>{STAFFREQ=q||[];if(STAFFREQ.length)render();}).withFailureHandler(()=>{}).adminStaffRequests(CODE);});
+}
+function staffDecide(row,ok){
+  if(busy)return;busy=true;
+  call('adminStaffDecide',[CODE,row,ok],m=>{busy=false;toast(m);STAFFREQ=STAFFREQ.filter(s=>s.row!==row);render();});
+  setTimeout(()=>{busy=false;},8000);
 }
 let busy=false;
 function approve(no,st){

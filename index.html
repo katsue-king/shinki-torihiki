@@ -28,6 +28,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>新規取引申請書</title>
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2e7d32">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="新規取引">
 <style>
   :root{--bg:#f4f5f2;--card:#fff;--ink:#1d2320;--sub:#66706b;--line:#d9ddd8;--acc:#1f6b4f;--acc2:#e7f2ec;--warn:#b3401f}
   *{box-sizing:border-box}
@@ -437,15 +443,53 @@ function submitForm(){
     console.log(data); setTimeout(()=>ok({no:'(お試し版のため未保存)'}),400);
   }
 }
-// 合言葉から名前を表示
+// 合言葉から名前を表示（承認済みなら合言葉の欄をかくし、次からはアプリを開くだけでその人として入れる）
+const GRUN=()=>window.google&&google.script&&google.script.run;
+function regBtn(){return '<br><button type="button" class="mapbtn" onclick="openReg()">はじめての方：自分の合言葉をつくる</button>';}
 function whoAmI(){
-  const c=getVal('合言葉'),box=document.querySelector('[data-k="合言葉"] .hint');
-  if(!c){box.textContent='一人ずつ配られた合言葉（一度入れるとこのスマホに記憶されます）';return;}
-  if(window.google&&google.script&&google.script.run) google.script.run.withSuccessHandler(n=>{box.innerHTML=n?'<b style="color:var(--acc)">'+esc(n)+' さんとして入力します</b>':'<b style="color:var(--warn)">合言葉が違います</b>';}).whoAmI(c);
-  else box.innerHTML='<b style="color:var(--acc)">（お試し）営業 山田 さんとして入力します</b>';
+  const c=getVal('合言葉'),box=document.querySelector('[data-k="合言葉"] .hint'),inp=document.getElementsByName('合言葉')[0];
+  if(!c){inp.hidden=false;box.innerHTML='一人ずつの合言葉（一度入れるとこのスマホに記憶され、次からは入力しなくて大丈夫です）'+regBtn();return;}
+  if(!GRUN()){box.innerHTML='<b style="color:var(--acc)">（お試し）営業 山田 さんとして入力します</b>';return;}
+  google.script.run.withSuccessHandler(r=>{
+    r=r||{};
+    if(r.status==='ok'){
+      inp.hidden=true;
+      box.innerHTML='<b style="color:var(--acc)">'+esc(r.name)+' さんとして入力します</b>　<a href="#" onclick="switchUser();return false">別の人に切りかえる</a>';
+      try{localStorage.setItem('shinki_pass',c);localStorage.setItem('shinki_code',c);}catch(e){}
+    }else if(r.status==='pending'){
+      inp.hidden=true;
+      box.innerHTML='<b style="color:var(--warn)">'+esc(r.name)+' さんの合言葉は、勝江さんの承認待ちです。承認されたら、このままアプリを開くだけで使えます。</b>　<a href="#" onclick="switchUser();return false">入れ直す</a>';
+    }else{
+      inp.hidden=false;
+      box.innerHTML='<b style="color:var(--warn)">'+(r.status==='rejected'?'この合言葉の申し込みは見送られました':r.status==='off'?'この合言葉は使えなくなっています':'合言葉が違います')+'</b>'+regBtn();
+    }
+  }).withFailureHandler(()=>{box.innerHTML='<b style="color:var(--warn)">合言葉を確かめられませんでした。電波のよいところで開き直してください</b>';}).staffStatus(c);
+}
+function switchUser(){setVal('合言葉','');try{localStorage.removeItem('shinki_pass');localStorage.removeItem('shinki_code');}catch(e){}document.getElementsByName('合言葉')[0].hidden=false;whoAmI();}
+// 自分の合言葉をつくる（勝江さんが承認すると使える）
+function openReg(){
+  let d=document.getElementById('regBox');
+  if(!d){d=document.createElement('div');d.id='regBox';d.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:20;display:flex;align-items:center;justify-content:center;padding:16px';document.body.appendChild(d);}
+  d.innerHTML='<div style="background:#fff;border-radius:14px;padding:16px;max-width:420px;width:100%;max-height:90vh;overflow:auto">'+
+    '<h3 style="margin:0 0 6px">自分の合言葉をつくる</h3><div class="hint">勝江さんが承認すると使えるようになります。合言葉はほかの人に教えないでください。</div>'+
+    '<div class="f"><label>名前（フルネーム）</label><input type="text" id="rg_n" autocomplete="name"></div>'+
+    '<div class="f"><label>役割</label><select id="rg_r"><option value="">選んでください</option><option>営業</option><option>ドライバー</option><option>社長</option></select></div>'+
+    '<div class="f"><label>合言葉（4文字以上・自分で決める）</label><input type="text" id="rg_c" autocomplete="off" autocapitalize="off"></div>'+
+    '<div id="rg_msg" class="hint"></div>'+
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px"><button type="button" onclick="document.getElementById(\'regBox\').remove()">やめる</button><button type="button" class="mapbtn" style="width:auto;margin:0" onclick="sendReg()">申し込む</button></div></div>';
+}
+function sendReg(){
+  const n=document.getElementById('rg_n').value.trim(),r=document.getElementById('rg_r').value,c=document.getElementById('rg_c').value.trim(),m=document.getElementById('rg_msg');
+  if(!n||!r||c.length<4){m.innerHTML='<b style="color:var(--warn)">名前・役割・4文字以上の合言葉を入れてください</b>';return;}
+  if(!GRUN()){m.textContent='（お試し版のため送れません）';return;}
+  m.textContent='送っています…';
+  google.script.run.withSuccessHandler(()=>{
+    setVal('合言葉',c);try{localStorage.setItem('shinki_pass',c);localStorage.setItem('shinki_code',c);}catch(e){}
+    document.getElementById('regBox').remove();whoAmI();toast('申し込みました。勝江さんの承認をお待ちください');
+  }).withFailureHandler(e=>{m.innerHTML='<b style="color:var(--warn)">'+esc(e.message||e)+'</b>';}).registerStaff(n,c,r);
 }
 // 合言葉はこのスマホに記憶
-try{const pc=localStorage.getItem('shinki_pass');if(pc)setVal('合言葉',pc);}catch(e){}
+try{const pc=localStorage.getItem('shinki_pass')||localStorage.getItem('shinki_code');if(pc)setVal('合言葉',pc);}catch(e){}
 document.getElementsByName('合言葉')[0].addEventListener('change',e=>{try{localStorage.setItem('shinki_pass',e.target.value.trim());}catch(_){}whoAmI();});
 if(window.google&&google.script&&google.script.run) google.script.run.withSuccessHandler(a=>{$('#courses').innerHTML=(a||[]).map(c=>`<option value="${esc(c)}">`).join('');}).getCourses();
 whoAmI(); loadDraft(); if(getVal('GoogleマップURL'))showMapView({url:getVal('GoogleマップURL')}); applyIf();
