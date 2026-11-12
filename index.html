@@ -243,7 +243,7 @@ function fieldHTML(f){
     inner='<div class="chips">'+f.opts.map(o=>`<label><input type="${t}" name="${esc(f.k)}" value="${esc(o)}"${f.def===o?' checked':''}><span>${esc(o)}</span></label>`).join('')+'</div>';
   }else if(f.type==='textarea'){inner=`<textarea id="${id}" name="${esc(f.k)}"></textarea>`;}
   else if(f.type==='simcheck'){inner=`<div id="simBox" class="hint">得意先名を入れると、特別食システムの既存のお客さんと照らし合わせます</div><input type="hidden" name="特別食システム照合">`;}
-  else if(f.type==='mapview'){inner=`<div class="mapimg" id="mapView"><div class="hint">「地図で探す」で選ぶと、ここに地図が出ます</div></div><input type="hidden" name="緯度経度"><input type="hidden" name="GoogleマップURL">`;}
+  else if(f.type==='mapview'){inner=`<div class="mapimg" id="mapView"><div class="hint">「地図で探す」で選ぶと、ここに地図が出ます</div></div><input type="hidden" name="緯度経度"><input type="hidden" name="GoogleマップURL"><input type="hidden" name="配送エリア判定"><div id="areaBox"></div>`;}
   else if(f.type==='select'){inner=`<select id="${id}" name="${esc(f.k)}"><option value="">選んでください</option>${f.opts.map(o=>`<option>${esc(o)}</option>`).join('')}</select>`;}
   else if(f.type==='costcalc'){inner=`<div id="costBox" class="hint">表の「セット単価」「基本個数」と、上の原価の選択から自動で計算します</div>`;}
   else if(f.type==='photo'){inner=`<div class="photo"><input type="file" accept="image/*" capture="environment" id="${id}"><img id="${id}_img" hidden></div>`;}
@@ -360,11 +360,33 @@ function pickMap(i){
   setVal('納品先住所',h.address);
   setVal('緯度経度',h.lat+','+h.lng); setVal('GoogleマップURL',h.url);
   showMapView(h); closeMap(); applyIf(); saveDraft(false);
+  checkAreaShow(h.lat,h.lng);
   toast('地図の情報を入れました。番地・建物名を確認してください');
   document.querySelector('[data-k="納品先住所"]').scrollIntoView({behavior:'smooth',block:'center'});
 }
 function showMapView(h){
   $('#mapView').innerHTML=(h.img?`<img src="${h.img}">`:'')+`<a href="${esc(h.url)}" target="_blank" rel="noopener">Googleマップで開いて確認する ↗</a>`;
+}
+
+// ===== 配送エリアの判定（今の配送ルートから500m以内か・トラックが何時ごろ通るか）=====
+function areaHtml(r){
+  const ok=r.inArea;
+  return `<div style="margin-top:10px;padding:12px;border-radius:12px;border:2px solid ${ok?'#2e7d32':'#c62828'};background:${ok?'#e8f5e9':'#ffebee'}">`+
+    `<b style="font-size:17px;color:${ok?'#2e7d32':'#c62828'}">${ok?'&#x2705; ':'&#x26A0;&#xFE0F; '}${esc(r.title)}</b>`+
+    `<ul style="margin:6px 0 0;padding-left:20px;font-size:14px;line-height:1.6">${(r.lines||[]).map(l=>'<li>'+esc(l)+'</li>').join('')}</ul></div>`;
+}
+function areaRun(fn,args,box,done){
+  if(!box) return;
+  if(!(window.google&&google.script&&google.script.run)) return;
+  box.innerHTML='<div class="hint">配送エリアを調べています…</div>';
+  google.script.run.withSuccessHandler(r=>{box.innerHTML=areaHtml(r);if(done)done(r);})
+    .withFailureHandler(e=>{box.innerHTML='<div class="hint">配送エリアを調べられませんでした：'+esc(e.message||e)+'</div>';})[fn](...args);
+}
+function checkAreaShow(lat,lng){
+  const box=document.getElementById('areaBox'), code=getVal('合言葉');
+  if(!box) return;
+  if(!code){box.innerHTML='<div class="hint">合言葉を入れると、配送エリア内かどうかがここに出ます</div>';return;}
+  areaRun('checkArea',[code,lat,lng],box,r=>setVal('配送エリア判定',r.summary));
 }
 
 // ===== 郵便番号から住所 =====
@@ -650,7 +672,7 @@ function eEdit(company,fields,img,records,back,cards){
      <div id="eCard">${img?`<img class="card" src="${img}">`:''}${back?`<img class="card" src="${back}">`:''}</div>
      ${company?`<button class="big sub" onclick="eShoot(true)">&#x1F4F7; 名刺をもう1枚撮る</button>`:''}
      ${CF.map(([k,t])=>eField(k,t,v[k]||'')).join('')}
-     <div id="eDup"></div>
+     <div id="eDup"></div><div id="eArea"></div>
      ${company?eField('状態','radio',company.状態,'状態',null,['訪問済み','申請中','契約済み','見送り']):''}
      ${company&&company.状態!=='契約済み'?`<button class="big sub" onclick="eToShinsei()">この会社で新規取引申請書を作る</button>`:''}
    </div></section>
@@ -660,6 +682,9 @@ function eEdit(company,fields,img,records,back,cards){
   document.getElementById('eFoot').hidden=false;
   const nameEl=document.getElementById('e_会社名');
   if(!company){ nameEl.addEventListener('change',eDup); if(v.会社名) eDup(); }
+  const adEl=document.getElementById('e_住所');
+  const eAreaCheck=()=>{const a=eVal('住所');if(a) areaRun('checkAreaByAddress',[eCode(),a],document.getElementById('eArea'));};
+  if(adEl){ adEl.addEventListener('change',eAreaCheck); if(v.住所) eAreaCheck(); }
   window.scrollTo(0,0);
 }
 async function eDup(){
