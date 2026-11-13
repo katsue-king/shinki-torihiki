@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f6b4f">
+<title>営業 訪問記録</title>
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>
+:root{--bg:#f4f5f2;--card:#fff;--ink:#1d2320;--sub:#66706b;--line:#d9ddd8;--acc:#1f6b4f;--acc2:#e7f2ec;--warn:#b3401f;--warn2:#fbece6;--blue:#2563a8;--blue2:#e8f0fa}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;font-size:16px;line-height:1.5;-webkit-text-size-adjust:100%}
+header{position:sticky;top:0;z-index:5;background:var(--acc);color:#fff;padding:10px 14px calc(10px) 14px;padding-top:calc(10px + env(safe-area-inset-top));display:flex;align-items:center;gap:10px}
+header h1{font-size:17px;margin:0;flex:1}
+header .who{font-size:13px;opacity:.9}
+header button{background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:8px;padding:6px 10px;font-size:13px}
+main{padding:12px 12px 120px;max-width:640px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin:0 0 12px}
+.card h2{font-size:16px;margin:0 0 10px}
+label.l{display:block;font-size:13px;color:var(--sub);margin:12px 0 6px;font-weight:600}
+input[type=text],input[type=password],input[type=date],input[type=search],select,textarea{width:100%;font-size:16px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);font-family:inherit}
+textarea{min-height:96px;resize:vertical}
+.btn{display:block;width:100%;border:0;border-radius:12px;padding:14px;font-size:17px;font-weight:700;background:var(--acc);color:#fff;margin-top:12px}
+.btn.sub{background:var(--acc2);color:var(--acc)}
+.btn:disabled{opacity:.5}
+.tabs{display:flex;gap:6px;overflow-x:auto;margin:0 0 12px;padding-bottom:2px}
+.tabs button{flex:0 0 auto;border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:999px;padding:9px 14px;font-size:15px}
+.tabs button.on{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:700}
+.purpose{display:flex;align-items:center;gap:8px;margin:0 0 12px;font-size:14px}
+.purpose select{flex:1;padding:9px;font-size:15px}
+.list{list-style:none;margin:0;padding:0}
+.list li{display:flex;align-items:center;gap:10px;padding:12px 4px;border-bottom:1px solid var(--line)}
+.list li:last-child{border-bottom:0}
+.list .nm{flex:1;min-width:0}
+.list .nm b{display:block;font-size:16px;overflow:hidden;text-overflow:ellipsis}
+.list .nm small{color:var(--sub);font-size:12.5px}
+.tag{flex:0 0 auto;font-size:12px;border-radius:999px;padding:3px 9px;background:#eee;color:var(--sub);white-space:nowrap}
+.tag.done{background:var(--acc2);color:var(--acc);font-weight:700}
+.tag.again{background:var(--warn2);color:var(--warn)}
+.dist{flex:0 0 auto;font-size:13px;color:var(--blue);font-weight:700}
+.res{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.res button{border:2px solid var(--line);background:#fff;border-radius:12px;padding:14px 6px;font-size:16px;color:var(--ink)}
+.res button.on{border-color:var(--acc);background:var(--acc2);color:var(--acc);font-weight:700}
+.muted{color:var(--sub);font-size:14px}
+.err{color:var(--warn);font-size:14px;margin-top:8px}
+table.pr{width:100%;border-collapse:collapse;font-size:13.5px}
+table.pr th,table.pr td{border-bottom:1px solid var(--line);padding:6px 4px;text-align:right;white-space:nowrap}
+table.pr th:first-child,table.pr td:first-child{text-align:left;white-space:normal}
+table.pr th{color:var(--sub);font-weight:600;font-size:12.5px}
+.up{color:var(--warn);font-weight:700}
+.visit{border-left:4px solid var(--acc2);padding:4px 0 4px 10px;margin:8px 0;font-size:14px}
+.photos{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.photos img{width:84px;height:84px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+.bar{height:10px;background:#e6e9e5;border-radius:6px;overflow:hidden;margin-top:4px}
+.bar i{display:block;height:100%;background:var(--acc)}
+details{border-bottom:1px solid var(--line);padding:8px 0}
+details summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;gap:8px}
+details summary::-webkit-details-marker{display:none}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#1d2320;color:#fff;padding:12px 18px;border-radius:12px;font-size:15px;z-index:20;max-width:90%;text-align:center}
+.back{background:none;border:0;color:var(--acc);font-size:15px;padding:4px 0;margin-bottom:8px}
+.hide{display:none !important}
+.big{font-size:20px;margin:0 0 4px}
+.row{display:flex;gap:8px}.row>*{flex:1}
+</style>
+</head>
+<body>
+<header>
+  <h1>営業 訪問記録</h1>
+  <span class="who" id="who"></span>
+  <button id="btnOut" class="hide" onclick="logout()">切替</button>
+</header>
+<main id="app"></main>
+<div id="toast" class="toast hide"></div>
+
+<script>
+const API='https://script.google.com/macros/s/AKfycbwuY9M1JLu_cix3Y3lH0svjSHIFxCVHC4nAs0SMFGFzylXngnrLHD_gxEF2nKtdkxV6iA/exec';
+const KEY='shinki_code';
+const S={code:'',me:null,purposes:[],purpose:'',courses:[],tab:'near',cust:null,result:'',photos:[],lastList:null,course:''};
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const yen=v=>(v===''||v==null||isNaN(Number(v)))?'':Number(v).toLocaleString()+'円';
+const today=()=>{const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10);};
+function toast(m,ms){const t=$('toast');t.textContent=m;t.classList.remove('hide');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.add('hide'),ms||2500);}
+function call(fn,...args){
+  return fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({api:fn,args:args})})
+    .then(r=>r.json()).then(j=>{if(j&&j.ok)return j.result;throw new Error((j&&j.error)||'うまくいきませんでした');});
+}
+function load(msg){$('app').innerHTML='<div class="card muted">'+esc(msg||'読み込み中…')+'</div>';}
+
+/* ---------- 合言葉 ---------- */
+function loginView(err){
+  $('who').textContent='';$('btnOut').classList.add('hide');
+  $('app').innerHTML=`<div class="card"><h2>合言葉を入れてください</h2>
+  <p class="muted">新規取引申請アプリと同じ合言葉です。</p>
+  <input type="password" id="code" autocomplete="current-password" placeholder="合言葉">
+  <button class="btn" onclick="login($('code').value)">はじめる</button>
+  ${err?'<p class="err">'+esc(err)+'</p>':''}</div>`;
+}
+function login(code){
+  code=String(code||'').trim(); if(!code)return loginView('合言葉を入れてください');
+  load('確認しています…');
+  call('init',code).then(r=>{
+    S.code=code;S.me=r.me;S.purposes=r.purposes;S.courses=r.courses;
+    S.purpose=(function(){try{return localStorage.getItem('houmon_purpose')}catch(e){return ''}})()||r.current;
+    if(!S.purposes.some(p=>p.name===S.purpose))S.purpose=r.current;
+    try{localStorage.setItem(KEY,code);}catch(e){}
+    $('who').textContent=r.me.name+'さん';$('btnOut').classList.remove('hide');
+    home();
+  }).catch(e=>loginView(e.message));
+}
+function logout(){try{localStorage.removeItem(KEY);}catch(e){}S.code='';loginView();}
+
+/* ---------- ホーム ---------- */
+function purposeBar(){
+  return `<div class="purpose"><span>何の訪問：</span><select onchange="setPurpose(this.value)">${S.purposes.map(p=>`<option ${p.name===S.purpose?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>`;
+}
+function setPurpose(v){S.purpose=v;try{localStorage.setItem('houmon_purpose',v)}catch(e){}home();}
+function tabs(){
+  const t=[['near','📍近く'],['course','コース'],['find','名前で探す'],['mine','記録']];
+  if(S.me.all)t.push(['prog','進み具合']);
+  return `<div class="tabs">${t.map(x=>`<button class="${S.tab===x[0]?'on':''}" onclick="S.tab='${x[0]}';home()">${x[1]}</button>`).join('')}</div>`;
+}
+function home(){
+  S.cust=null;
+  const head=purposeBar()+tabs();
+  if(S.tab==='near'){$('app').innerHTML=head+'<div class="card" id="box"><button class="btn" onclick="near()">📍 近くの得意先を出す</button><p class="muted" style="margin-top:8px">今いる場所から近い順に10件出ます。</p></div>';if(S.lastList&&S.lastList.kind==='near')showList(S.lastList.list,'近くの得意先',true);}
+  else if(S.tab==='course'){$('app').innerHTML=head+`<div class="card"><select id="crs" onchange="pickCourse(this.value)"><option value="">コースを選ぶ</option>${S.courses.map(c=>`<option ${c.course===S.course?'selected':''} value="${esc(c.course)}">${esc(c.course)}（${c.count}件）</option>`).join('')}</select></div><div id="box"></div>`;if(S.course)pickCourse(S.course);}
+  else if(S.tab==='find'){$('app').innerHTML=head+'<div class="card"><input type="search" id="q" placeholder="名前か住所の一部" onkeydown="if(event.key===\'Enter\')find()"><button class="btn" onclick="find()">探す</button></div><div id="box"></div>';setTimeout(()=>$('q')&&$('q').focus(),50);}
+  else if(S.tab==='mine'){$('app').innerHTML=head+'<div id="box"></div>';mine();}
+  else if(S.tab==='prog'){$('app').innerHTML=head+'<div id="box"></div>';prog();}
+}
+function boxLoad(m){const b=$('box');if(b)b.innerHTML='<div class="card muted">'+esc(m||'読み込み中…')+'</div>';}
+function tagOf(c){
+  if(!c.status)return '<span class="tag">まだ</span>';
+  if(c.status==='済み')return '<span class="tag done">済み</span>';
+  return '<span class="tag again">'+esc(c.status)+'</span>';
+}
+function showList(list,title,withDist){
+  S.lastList={kind:S.tab,list:list};
+  const b=$('box'); if(!b)return;
+  if(!list.length){b.innerHTML='<div class="card muted">見つかりませんでした</div>';return;}
+  b.innerHTML=`<div class="card"><h2>${esc(title)}（${list.length}件）</h2><ul class="list">${list.map(c=>`<li onclick="openCust('${esc(c.id)}')">
+   <div class="nm"><b>${esc(c.name)}</b><small>${esc(c.course)} ${esc(c.rj)}　${esc(c.addr)}</small></div>
+   ${withDist&&c.dist!=null?'<span class="dist">'+(c.dist<1000?c.dist+'m':(c.dist/1000).toFixed(1)+'km')+'</span>':''}${tagOf(c)}</li>`).join('')}</ul></div>`;
+}
+function near(){
+  if(!navigator.geolocation)return toast('この端末では場所がわかりません');
+  boxLoad('場所を調べています…');
+  navigator.geolocation.getCurrentPosition(p=>{
+    S.here={lat:p.coords.latitude,lng:p.coords.longitude};
+    call('nearby',S.code,S.here.lat,S.here.lng,S.purpose).then(l=>{home();showList(l,'近くの得意先',true);}).catch(e=>boxLoad(e.message));
+  },e=>{boxLoad('場所がわかりませんでした。設定で「位置情報」を許可するか、コースか名前で探してください。');},{enableHighAccuracy:true,timeout:15000,maximumAge:60000});
+}
+function pickCourse(c){S.course=c;if(!c)return;boxLoad();call('course',S.code,c,S.purpose).then(l=>showList(l,c,false)).catch(e=>boxLoad(e.message));}
+function find(){const q=$('q').value.trim();if(!q)return;boxLoad();call('search',S.code,q,S.purpose).then(l=>showList(l,'「'+q+'」',false)).catch(e=>boxLoad(e.message));}
+
+/* ---------- 得意先 ---------- */
+function openCust(id){
+  load();
+  S.result='';S.photos=[];
+  call('customer',S.code,id).then(r=>{S.cust=r.cust;custView(r);window.scrollTo(0,0);}).catch(e=>{toast(e.message);home();});
+}
+function priceTable(r){
+  if(!r.prices.length)return '<p class="muted">値上げの記録はありません</p>';
+  const yrs=['2024','2025','2026'];
+  let h=r.pricesByCd?'<p class="muted">※同じ得意先CDの記録を出しています</p>':'';
+  h+='<div style="overflow-x:auto"><table class="pr"><tr><th>メニュー</th><th>今</th>'+yrs.map(y=>'<th>'+y+'年</th>').join('')+'<th>累計</th></tr>';
+  r.prices.forEach(p=>{
+    h+='<tr><td>'+esc(p.menu)+'</td><td>'+yen(p.now)+'</td>'+p.years.map(y=>{
+      if(Number(y.up)>0)return '<td><span class="up">+'+Number(y.up)+'</span><br><small>'+esc((y.date||'').slice(2,7).replace('-','/'))+'</small></td>';
+      return '<td><small>'+esc(y.status||'')+'</small></td>';
+    }).join('')+'<td>'+(Number(p.total)>0?'<span class="up">+'+Number(p.total)+'</span>':'0')+'</td></tr>';
+  });
+  return h+'</table></div>';
+}
+function custView(r){
+  const c=r.cust;const p=S.purposes.find(x=>x.name===S.purpose)||{results:[]};
+  $('app').innerHTML=`<button class="back" onclick="home()">← 一覧にもどる</button>
+  <div class="card"><p class="big"><b>${esc(c.name)}</b></p><p class="muted">${esc(c.course)} ${esc(c.rj)}　${esc(c.addr)}</p>
+   ${c.lat!=null?`<a class="muted" href="https://www.google.com/maps/search/?api=1&query=${c.lat},${c.lng}" target="_blank">地図で開く</a>`:''}</div>
+  <div class="card"><h2>${esc(S.purpose)}の記録を入れる</h2>
+   <label class="l">結果</label><div class="res">${p.results.map(x=>`<button onclick="setRes(this,'${esc(x)}')">${esc(x)}</button>`).join('')}</div>
+   <label class="l">お客様の反応メモ（キーボードのマイクで声でも入れられます）</label><textarea id="memo"></textarea>
+   <div class="row"><div><label class="l">訪問日</label><input type="date" id="date" value="${today()}"></div><div><label class="l">次に行く日</label><input type="date" id="next"></div></div>
+   <label class="l">写真（あれば）</label><input type="file" id="ph" accept="image/*" multiple onchange="addPhotos(this.files)"><div class="photos" id="phs"></div>
+   <button class="btn" id="send" onclick="send()">送る</button></div>
+  <div class="card"><h2>過去の値上げ</h2>${priceTable(r)}</div>
+  <div class="card"><h2>今までの訪問</h2>${r.visits.length?r.visits.map(v=>`<div class="visit"><b>${esc(v.date)}</b> ${esc(v.purpose)}：<b>${esc(v.result)}</b>（${esc(v.who)}）${v.memo?'<br>'+esc(v.memo):''}${v.next?'<br><span class="muted">次に行く日 '+esc(v.next)+'</span>':''}</div>`).join(''):'<p class="muted">まだありません</p>'}</div>`;
+}
+function setRes(b,v){S.result=v;document.querySelectorAll('.res button').forEach(x=>x.classList.toggle('on',x===b));}
+function addPhotos(files){
+  [...files].slice(0,4-S.photos.length).forEach(f=>{
+    const img=new Image();const u=URL.createObjectURL(f);
+    img.onload=()=>{const m=1280,k=Math.min(1,m/Math.max(img.width,img.height));const cv=document.createElement('canvas');cv.width=Math.round(img.width*k);cv.height=Math.round(img.height*k);
+      cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);const d=cv.toDataURL('image/jpeg',0.8);S.photos.push(d);URL.revokeObjectURL(u);drawPh();};
+    img.src=u;
+  });
+  $('ph').value='';
+}
+function drawPh(){$('phs').innerHTML=S.photos.map((d,i)=>`<img src="${d}" onclick="if(confirm('この写真を消しますか？')){S.photos.splice(${i},1);drawPh();}">`).join('');}
+function send(){
+  if(!S.result)return toast('結果を選んでください');
+  const b=$('send');b.disabled=true;b.textContent='送っています…';
+  const rec={custId:S.cust.id,purpose:S.purpose,result:S.result,memo:$('memo').value.trim(),date:$('date').value,next:$('next').value,
+    photos:S.photos.map(d=>({type:'image/jpeg',data:d.split(',')[1]}))};
+  const go=()=>call('save',S.code,rec).then(r=>{toast(r.name+' を記録しました');S.lastList=null;home();if(S.tab==='near')near();})
+    .catch(e=>{b.disabled=false;b.textContent='送る';toast(e.message,4000);});
+  if(navigator.geolocation){navigator.geolocation.getCurrentPosition(p=>{rec.lat=p.coords.latitude.toFixed(6);rec.lng=p.coords.longitude.toFixed(6);go();},()=>go(),{timeout:6000,maximumAge:120000});}
+  else go();
+}
+
+/* ---------- 記録・進み具合 ---------- */
+function mine(){
+  boxLoad();
+  call('myRecords',S.code,50).then(l=>{
+    $('box').innerHTML='<div class="card"><h2>'+(S.me.all?'みんなの':'自分の')+'記録（新しい順）</h2>'+(l.length?l.map(v=>`<div class="visit" onclick="openCust('${esc(v.custId)}')"><b>${esc(v.date)}</b> ${esc(v.name)}<br>${esc(v.purpose)}：<b>${esc(v.result)}</b>${S.me.all?'（'+esc(v.who)+'）':''}${v.memo?'<br><span class="muted">'+esc(v.memo)+'</span>':''}</div>`).join(''):'<p class="muted">まだありません</p>')+'</div>';
+  }).catch(e=>boxLoad(e.message));
+}
+function prog(){
+  boxLoad();
+  call('progress',S.code,S.purpose).then(r=>{
+    const pct=r.total?Math.round(r.done*100/r.total):0;
+    let h=`<div class="card"><h2>${esc(S.purpose)}：全体</h2><p class="big"><b>${r.done}</b> / ${r.total}件（${pct}%）</p><div class="bar"><i style="width:${pct}%"></i></div></div>`;
+    h+='<div class="card"><h2>営業ごと</h2>'+(r.people.length?r.people.map(p=>`<div class="visit"><b>${esc(p.who)}</b>　訪問${p.visits}回・${p.custs}件<br><span class="muted">${Object.entries(p.results).map(([k,v])=>esc(k)+' '+v).join('　')}</span></div>`).join(''):'<p class="muted">まだ記録がありません</p>')+'</div>';
+    h+='<div class="card"><h2>コースごと（タップでまだの得意先）</h2>'+r.courses.map(c=>{const q=c.total?Math.round(c.done*100/c.total):0;
+      return `<details><summary><span>${esc(c.course)}</span><span>${c.done}/${c.total}</span></summary><div class="bar"><i style="width:${q}%"></i></div><ul class="list">${c.rest.map(x=>`<li onclick="openCust('${esc(x.id)}')"><div class="nm"><b>${esc(x.name)}</b><small>${esc(x.rj)}</small></div>${x.status?'<span class="tag again">'+esc(x.status)+'</span>':'<span class="tag">まだ</span>'}</li>`).join('')}</ul></details>`;}).join('')+'</div>';
+    $('box').innerHTML=h;
+  }).catch(e=>boxLoad(e.message));
+}
+
+/* ---------- はじめ ---------- */
+(function(){
+  const k=new URLSearchParams(location.search).get('k');
+  let c=k||'';try{c=c||localStorage.getItem(KEY)||'';}catch(e){}
+  if(c)login(c);else loginView();
+})();
+</script>
+</body>
+</html>

@@ -601,7 +601,7 @@ function eField(k,t,val,label,ph,opts){
 }
 function eVal(k){const r=document.querySelector(`input[name="e_${k}"]:checked`);if(r)return r.value;const el=document.getElementById('e_'+k);return el?el.value.trim():'';}
 async function eHome(){
-  E.cur=null;E.img='';E.second=false;E.card=null;
+  E.cur=null;E.img='';E.second=false;E.card=null;E.visit=null;
   document.getElementById('eFoot').hidden=true;
   const m=document.getElementById('eigyo');
   const code=eCode();
@@ -658,7 +658,7 @@ function camFile(input){
   img.src=URL.createObjectURL(file);
 }
 function camGot(data){
-  if(camSide==='表'){E.front=data;camOpen('裏');toast('表面を撮りました。次は裏面です');}
+  if(camSide==='表'){E.front=data;if(!E.second) eVisitStart('名刺');camOpen('裏');toast('表面を撮りました。次は裏面です');}
   else camDone(data);
 }
 async function camDone(back){
@@ -703,7 +703,7 @@ async function eNippo(day){
   try{
     const r=await eRun('eigyoNippo',eCode(),nDay.replace(/-/g,'/'));
     const tot=r.groups.reduce((a,g)=>a+g.recs.length,0);
-    document.getElementById('nRes').innerHTML=`<div class="hint" style="margin:6px 2px">${eEsc(r.day)}　訪問 ${tot}件</div>`+(r.groups.length?r.groups.map(g=>`<section><h2>${eEsc(g.name)}<small>${g.recs.length?'訪問'+g.recs.length+'件':'記録なし'}${g.newCompanies?'・新しい会社'+g.newCompanies:''}${g.cards?'・名刺'+g.cards+'枚':''}</small></h2><div class="body">${g.recs.map(x=>`<div class="nrec" onclick="eOpen('${eEsc(x.id)}')"><b>${eEsc(x.会社名)}</b>${x.見込み?`<span class="tag ${eEsc(x.見込み.charAt(0))}">${eEsc(x.見込み.charAt(0))}</span>`:''}${x.新規?'<span class="tag">新</span>':''}${['話した内容','次にやること','次の訪問予定日','今の弁当業者','提案した単価','試食'].filter(k=>x[k]).map(k=>`<div style="white-space:pre-wrap"><small style="color:var(--sub)">${k}</small>　${eEsc(x[k])}</div>`).join('')}</div>`).join('')||'<div class="hint">この日の営業の記録はありません</div>'}</div></section>`).join(''):'<div class="hint">この日の営業の記録はありません</div>');
+    document.getElementById('nRes').innerHTML=`<div class="hint" style="margin:6px 2px">${eEsc(r.day)}　訪問 ${tot}件</div>`+(r.groups.length?r.groups.map(g=>`<section><h2>${eEsc(g.name)}<small>${g.recs.length?'訪問'+g.recs.length+'件':'記録なし'}${g.newCompanies?'・新しい会社'+g.newCompanies:''}${g.cards?'・名刺'+g.cards+'枚':''}</small></h2><div class="body">${g.recs.map(x=>`<div class="nrec" onclick="eOpen('${eEsc(x.id)}')">${x.訪問時刻?`<b style="color:var(--acc)">${eEsc(x.訪問時刻)}</b> `:''}<b>${eEsc(x.会社名)}</b>${x.緯度経度?` <a href="https://www.google.com/maps?q=${eEsc(x.緯度経度)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="font-size:12px">地図</a>`:''}${x.見込み?`<span class="tag ${eEsc(x.見込み.charAt(0))}">${eEsc(x.見込み.charAt(0))}</span>`:''}${x.新規?'<span class="tag">新</span>':''}${['話した内容','次にやること','次の訪問予定日','今の弁当業者','提案した単価','試食'].filter(k=>x[k]).map(k=>`<div style="white-space:pre-wrap"><small style="color:var(--sub)">${k}</small>　${eEsc(x[k])}</div>`).join('')}</div>`).join('')||'<div class="hint">この日の営業の記録はありません</div>'}</div></section>`).join(''):'<div class="hint">この日の営業の記録はありません</div>');
   }catch(e){document.getElementById('nRes').innerHTML='<div class="hint">'+eEsc(e.message||e)+'</div>';}
   window.scrollTo(0,0);
 }
@@ -715,6 +715,10 @@ function eNippoMove(n){const d=new Date(nDay+'T00:00:00Z');d.setUTCDate(d.getUTC
   const k=q.get('k'); if(k){ setVal('合言葉',k); try{localStorage.setItem('shinki_code',k);}catch(e){} }
   setTimeout(()=>{ eTab('e'); eNippo(); },300);
 })();
+// ----- 訪問の時刻と場所（ボタンを押した時だけ。ずっと追いかけることはしない） -----
+function ePos(ms){return new Promise(ok=>{ if(!navigator.geolocation) return ok(null); let done=false; const t=setTimeout(()=>{if(!done){done=true;ok(null);}},ms||6000); navigator.geolocation.getCurrentPosition(p=>{if(!done){done=true;clearTimeout(t);ok({lat:p.coords.latitude,lng:p.coords.longitude});}},()=>{if(!done){done=true;clearTimeout(t);ok(null);}},{enableHighAccuracy:true,timeout:ms||6000,maximumAge:60000}); });}
+function eVisitStart(how,pos){ E.visit={t:Date.now(),how:how,p:pos||null}; if(!pos) ePos(8000).then(p=>{ if(E.visit&&!E.visit.p) E.visit.p=p; }); }
+function eHHMM(t){ return new Date(t+9*3600e3).toISOString().slice(11,16); }
 // ----- 現在地のまわりの会社を地図の情報から出す -----
 function eHere(){return new Promise((ok,ng)=>{ if(!navigator.geolocation) return ng(new Error('このスマホでは現在地が使えません')); navigator.geolocation.getCurrentPosition(p=>ok(p.coords),e=>ng(new Error(e.code===1?'位置情報の使用を「許可」してください':'現在地がわかりませんでした')),{enableHighAccuracy:true,timeout:15000,maximumAge:30000}); });}
 let nearHits=[];
@@ -724,7 +728,7 @@ async function eNear(){
   const m=document.getElementById('eigyo');
   m.innerHTML=`<button class="big sub" onclick="eHome()">← 戻る</button><section><h2>現在地から会社を選ぶ<small>近い順</small></h2><div class="body" id="nearRes"><div class="hint">現在地を調べています…</div></div></section>`;
   try{
-    const c=await eHere(); document.getElementById('nearRes').innerHTML='<div class="hint">まわりの会社を探しています…</div>';
+    const c=await eHere(); eVisitStart('現在地',{lat:c.latitude,lng:c.longitude}); document.getElementById('nearRes').innerHTML='<div class="hint">まわりの会社を探しています…</div>';
     nearHits=await eRun('mapNearby',c.latitude,c.longitude);
     document.getElementById('nearRes').innerHTML=nearList(nearHits)+'<div class="hint" style="margin-top:8px">地図の情報（Googleマップ）から出しています。出ない会社は、名刺を撮るか名刺なしで登録してください。</div>';
   }catch(e){ document.getElementById('nearRes').innerHTML='<div class="hint">'+eEsc(e.message||e)+'</div>'; }
@@ -829,12 +833,14 @@ async function eSave(){
   const company={};CF.forEach(([k])=>company[k]=eVal(k));
   if(!company.会社名){toast('会社名を入れてください');return;}
   const record={};RF.forEach(f=>{if(f.k)record[f.k]=eVal(f.k);});
+  let v=E.visit; if(!v){ v={t:Date.now(),how:'登録'}; v.p=await ePos(6000); } else if(!v.p){ v.p=await ePos(4000); }
+  record['訪問時刻']=eHHMM(v.t); record['緯度経度']=v.p?v.p.lat.toFixed(6)+','+v.p.lng.toFixed(6):''; record['記録方法']=v.how;
   const p={id:E.cur?E.cur.営業先ID:'',company:company,record:record,imageUrl:E.img||''};
   if(E.cur&&eVal('状態')&&eVal('状態')!==E.cur.状態) p['状態']=eVal('状態');
   if(E.card){ const info={}; P2.forEach(k=>{ const el=document.getElementById('e2_'+k); info[k]=el?el.value.trim():(company[k]||''); }); p.card=Object.assign({},E.card,{info:info}); }
   if(E.cur&&E.second) p.secondCard=true;
   const btn=document.querySelector('#eFoot .main'); btn.disabled=true; btn.textContent='登録中…';
-  try{ await eRun('eigyoSave',eCode(),p); toast('登録しました'); eHome(); }
+  try{ await eRun('eigyoSave',eCode(),p); E.visit=null; toast('登録しました'); eHome(); }
   catch(e){ toast('登録できませんでした：'+(e.message||e)); }
   finally{ btn.disabled=false; btn.textContent='登録する'; }
 }
