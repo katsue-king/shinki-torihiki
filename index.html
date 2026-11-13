@@ -520,7 +520,15 @@ whoAmI(); loadDraft(); if(getVal('GoogleマップURL'))showMapView({url:getVal('
   #eFoot[hidden],#eigyo[hidden],#sugBox[hidden],#camBox[hidden]{display:none}
   #camBox{position:fixed;inset:0;z-index:50;background:#000;color:#fff;display:flex;flex-direction:column}
   #camTitle{padding:14px;font-size:16px;text-align:center}
-  #camVideo{flex:1;width:100%;object-fit:contain;background:#000;min-height:0}
+  #camWrap{position:relative;flex:1;min-height:0;background:#000;overflow:hidden}
+  #camWrap[hidden]{display:none}
+  #camVideo{width:100%;height:100%;object-fit:contain;background:#000;display:block}
+  #camGuide{position:absolute;border:3px solid #fff;border-radius:10px;box-shadow:0 0 0 9999px rgba(0,0,0,.5);pointer-events:none}
+  #camGuide span{position:absolute;left:0;right:0;top:-30px;text-align:center;font-size:14px;color:#fff}
+  .camDir{display:flex;gap:8px;padding:8px 12px 0}
+  .camDir button{flex:1;font-size:15px;padding:10px;border-radius:10px;border:1px solid #666;background:#222;color:#fff}
+  .camDir button.on{background:#fff;color:#000;font-weight:bold}
+  #eigyo .rotb{font-size:13px;padding:4px 10px;border-radius:8px;border:1px solid var(--line);background:#fff;margin:2px 4px 6px 0}
   #camVideo[hidden],#camShot[hidden],#camSkip[hidden],#camHint[hidden]{display:none}
   #camHint{flex:1;padding:30px 20px;font-size:16px}
   .camBtns{display:flex;flex-wrap:wrap;gap:8px;padding:12px 12px calc(12px + env(safe-area-inset-bottom))}
@@ -542,7 +550,7 @@ whoAmI(); loadDraft(); if(getVal('GoogleマップURL'))showMapView({url:getVal('
 <main id="eigyo" hidden></main>
 <div id="bigBox" hidden onclick="this.hidden=true"></div>
 <div id="eFoot" hidden><button onclick="eHome()">一覧へ戻る</button><button class="main" onclick="eSave()">登録する</button></div>
-<div id="camBox" hidden><div id="camTitle"></div><video id="camVideo" playsinline muted></video>
+<div id="camBox" hidden><div id="camTitle"></div><div class="camDir" id="camDirBtns"><button data-d="h" onclick="camDir('h')">横の名刺</button><button data-d="v" onclick="camDir('v')">縦の名刺</button></div><div id="camWrap"><video id="camVideo" playsinline muted></video><div id="camGuide"><span>名刺をこの枠に合わせて、字が上向きになるように</span></div></div>
 <div id="camHint" hidden>このスマホでは画面の中でカメラを使えません。下の「カメラで撮る」を押してください。</div>
 <div class="camBtns"><button id="camShot" class="shoot" onclick="camShot()">撮る</button>
 <label class="lbtn">カメラで撮る<input type="file" accept="image/*" capture="environment" onchange="camFile(this)" hidden></label>
@@ -598,7 +606,7 @@ async function eHome(){
   const m=document.getElementById('eigyo');
   const code=eCode();
   if(!code){m.innerHTML=`<section><h2>合言葉</h2><div class="body"><div class="f"><label>自分の合言葉</label><input type="text" id="eCodeIn"></div><button class="big" onclick="eSetCode()">はじめる</button></div></section>`;return;}
-  m.innerHTML=`<button class="big" onclick="eShoot(false)">&#x1F4F7; 名刺を撮る（新しい会社）</button><button class="big sub" onclick="eEdit(null)">名刺なしで会社を登録する</button><button class="big sub" onclick="eCardList()">&#x1F4C7; 名刺一覧・さがす</button><button class="big sub" onclick="eNippo()">&#x1F4CB; 日報</button><section><h2>自分の営業先 <small id="eCnt"></small></h2><div class="body" id="eList"><div class="hint">読み込み中…</div></div></section>`;
+  m.innerHTML=`<button class="big" onclick="eShoot(false)">&#x1F4F7; 名刺を撮る（新しい会社）</button><button class="big sub" onclick="eNear()">&#x1F4CD; 現在地から会社を選ぶ</button><button class="big sub" onclick="eEdit(null)">名刺なしで会社を登録する</button><button class="big sub" onclick="eCardList()">&#x1F4C7; 名刺一覧・さがす</button><button class="big sub" onclick="eNippo()">&#x1F4CB; 日報</button><section><h2>自分の営業先 <small id="eCnt"></small></h2><div class="body" id="eList"><div class="hint">読み込み中…</div></div></section>`;
   try{
     E.list=await eRun('eigyoList',code);
     document.getElementById('eCnt').textContent=E.list.length+'件';
@@ -614,20 +622,34 @@ function camOpen(side){
   const b=document.getElementById('camBox');
   document.getElementById('camTitle').textContent=side==='表'?'名刺の表面を撮ってください':'裏面を撮ってください（裏が白紙なら「裏面なし」）';
   document.getElementById('camSkip').hidden=side==='表';
-  b.hidden=false;
+  b.hidden=false; camDir(camD);
   if(camStream) return;
   if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){camFallback();return;}
   navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false})
-   .then(s=>{camStream=s;const v=document.getElementById('camVideo');v.srcObject=s;v.play();})
+   .then(s=>{camStream=s;const v=document.getElementById('camVideo');v.srcObject=s;v.onloadedmetadata=()=>setTimeout(()=>camDir(camD),100);v.play();})
    .catch(()=>camFallback());
 }
-function camFallback(){document.getElementById('camVideo').hidden=true;document.getElementById('camShot').hidden=true;document.getElementById('camHint').hidden=false;}
-function camClose(){if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null;}document.getElementById('camBox').hidden=true;document.getElementById('camVideo').hidden=false;document.getElementById('camShot').hidden=false;document.getElementById('camHint').hidden=true;}
+function camFallback(){document.getElementById('camWrap').hidden=true;document.getElementById('camDirBtns').hidden=true;document.getElementById('camShot').hidden=true;document.getElementById('camHint').hidden=false;}
+function camClose(){if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null;}document.getElementById('camBox').hidden=true;document.getElementById('camWrap').hidden=false;document.getElementById('camDirBtns').hidden=false;document.getElementById('camShot').hidden=false;document.getElementById('camHint').hidden=true;}
+// 名刺の向き（横／縦）。枠に合わせて撮ると、その向きのまま切り取って保存する
+let camD=(()=>{try{return localStorage.getItem('card_dir')||'h';}catch(e){return 'h';}})(), camBoxR=null;
+function camDir(d){camD=d;try{localStorage.setItem('card_dir',d);}catch(e){}document.querySelectorAll('#camDirBtns button').forEach(b=>b.classList.toggle('on',b.dataset.d===d));camLayout();}
+function camLayout(){
+  const v=document.getElementById('camVideo'),w=document.getElementById('camWrap'),g=document.getElementById('camGuide');
+  if(!v.videoWidth||!w.clientWidth) return;
+  const sc=Math.min(w.clientWidth/v.videoWidth,w.clientHeight/v.videoHeight),dw=v.videoWidth*sc,dh=v.videoHeight*sc,ox=(w.clientWidth-dw)/2,oy=(w.clientHeight-dh)/2;
+  const ratio=camD==='h'?91/55:55/91; let gw=dw*0.9,gh=gw/ratio; if(gh>dh*0.85){gh=dh*0.85;gw=gh*ratio;}
+  const gx=ox+(dw-gw)/2,gy=oy+(dh-gh)/2;
+  Object.assign(g.style,{left:gx+'px',top:gy+'px',width:gw+'px',height:gh+'px'});
+  camBoxR={x:(gx-ox)/sc,y:(gy-oy)/sc,w:gw/sc,h:gh/sc};
+}
+window.addEventListener('resize',()=>setTimeout(camLayout,200));
 function camShot(){
   const v=document.getElementById('camVideo'); if(!v.videoWidth) return;
-  const s=Math.min(1,1600/Math.max(v.videoWidth,v.videoHeight)),cv=document.createElement('canvas');
-  cv.width=v.videoWidth*s;cv.height=v.videoHeight*s;cv.getContext('2d').drawImage(v,0,0,cv.width,cv.height);
-  camGot(cv.toDataURL('image/jpeg',0.85));
+  camLayout(); const b=camBoxR||{x:0,y:0,w:v.videoWidth,h:v.videoHeight};
+  const s=Math.min(1,1600/Math.max(b.w,b.h)),cv=document.createElement('canvas');
+  cv.width=Math.round(b.w*s);cv.height=Math.round(b.h*s);cv.getContext('2d').drawImage(v,b.x,b.y,b.w,b.h,0,0,cv.width,cv.height);
+  camGot(cv.toDataURL('image/jpeg',0.88));
 }
 function camFile(input){
   const file=input.files[0]; input.value=''; if(!file) return;
@@ -652,15 +674,24 @@ async function camDone(back){
 }
 function eShowSecond(front,back,f){
   const b=document.getElementById('eCard'); if(!b) return; f=f||{};
-  b.innerHTML='<div class="warn" style="background:#eef4fb;border-color:#a9c4e4"><b>この会社の名刺を足します</b><div class="mthumbs" style="margin-top:8px">'+(front?`<img src="${front}">`:'')+(back?`<img src="${back}">`:'')+'</div>'+P2.map(k=>`<div class="f"><label>${k}（この名刺）</label><input type="${/電話|携帯/.test(k)?'tel':k==='メール'?'email':'text'}" id="e2_${k}" value="${eEsc(f[k]||'')}"></div>`).join('')+'</div>';
+  b.innerHTML='<div class="warn" style="background:#eef4fb;border-color:#a9c4e4"><b>この会社の名刺を足します</b><div style="margin-top:8px">'+(front?eImg(front,E.card&&E.card.frontId,0):'')+' '+(back?eImg(back,E.card&&E.card.backId,0):'')+'</div>'+P2.map(k=>`<div class="f"><label>${k}（この名刺）</label><input type="${/電話|携帯/.test(k)?'tel':k==='メール'?'email':'text'}" id="e2_${k}" value="${eEsc(f[k]||'')}"></div>`).join('')+'</div>';
 }
-async function eBig(fid){
+// 画像を回して見せる（向きは名刺シートに残る）
+function eRotSrc(src,deg){return new Promise(ok=>{deg=((+deg||0)%360+360)%360;if(!deg||!src)return ok(src);const im=new Image();im.onload=()=>{const c=document.createElement('canvas'),r=deg%180!==0;c.width=r?im.height:im.width;c.height=r?im.width:im.height;const x=c.getContext('2d');x.translate(c.width/2,c.height/2);x.rotate(deg*Math.PI/180);x.drawImage(im,-im.width/2,-im.height/2);ok(c.toDataURL('image/jpeg',0.9));};im.onerror=()=>ok(src);im.src=src;});}
+async function eRotFix(img){ if(img.dataset.done) return; img.dataset.done=1; const d=+img.dataset.rot||0; if(d) img.src=await eRotSrc(img.dataset.src||img.src,d); }
+function eImg(src,fid,rot,big){ return `<span style="display:inline-block;width:48%;vertical-align:top;text-align:center"><img src="${src}" data-src="${src}" data-fid="${eEsc(fid||'')}" data-rot="${+rot||0}" onload="eRotFix(this)" ${big?`onclick="eBig('${eEsc(fid)}',+this.dataset.rot)"`:''} style="width:100%;border-radius:6px;border:1px solid var(--line)${big?';cursor:zoom-in':''}">${fid?`<br><button type="button" class="rotb" onclick="eRotate(this)">↻ 向きを直す</button>`:''}</span>`; }
+async function eRotate(btn){
+  const img=btn.parentNode.querySelector('img'); const fid=img.dataset.fid; const d=((+img.dataset.rot||0)+90)%360;
+  img.dataset.rot=d; img.dataset.done=1; img.src=await eRotSrc(img.dataset.src,d);
+  try{ await eRun('eigyoCardRotate',eCode(),fid,d); }catch(e){ toast('向きを残せませんでした：'+(e.message||e)); }
+}
+async function eBig(fid,rot){
   if(!fid) return; const bx=document.getElementById('bigBox'); bx.innerHTML='読み込み中…'; bx.hidden=false;
-  try{ const u=await eRun('eigyoCardImage',eCode(),fid); bx.innerHTML=`<img src="${u}">`; }catch(e){ bx.innerHTML=eEsc(e.message||e); }
+  try{ const u=await eRun('eigyoCardImage',eCode(),fid); bx.innerHTML=`<img src="${await eRotSrc(u,rot)}">`; }catch(e){ bx.innerHTML=eEsc(e.message||e); }
 }
 function eCardsHtml(cards){
   if(!cards||!cards.length) return '';
-  return `<section><h2>名刺<small>${cards.length}枚</small></h2><div class="body">`+cards.map(c=>`<div class="mcard"><div class="mthumbs">${c.frontThumb?`<img src="${c.frontThumb}" onclick="eBig('${eEsc(c.frontId)}')">`:''}${c.backThumb?`<img src="${c.backThumb}" onclick="eBig('${eEsc(c.backId)}')">`:''}</div><b>${eEsc(c.担当者名||'（名前なし）')}</b> ${eEsc([c.部署,c.役職].filter(Boolean).join(' '))}<small style="display:block;color:var(--sub)">${eEsc([c.携帯&&'携帯 '+c.携帯,c.電話&&'電話 '+c.電話,c.メール].filter(Boolean).join('　'))}</small><small style="display:block;color:var(--sub)">もらった日 ${eEsc(c.もらった日)}　${eEsc(c.営業担当)}</small></div>`).join('')+'</div></section>';
+  return `<section><h2>名刺<small>${cards.length}枚</small></h2><div class="body">`+cards.map(c=>`<div class="mcard"><div>${c.frontThumb?eImg(c.frontThumb,c.frontId,c.frontRot,1):''} ${c.backThumb?eImg(c.backThumb,c.backId,c.backRot,1):''}</div><b>${eEsc(c.担当者名||'（名前なし）')}</b> ${eEsc([c.部署,c.役職].filter(Boolean).join(' '))}<small style="display:block;color:var(--sub)">${eEsc([c.携帯&&'携帯 '+c.携帯,c.電話&&'電話 '+c.電話,c.メール].filter(Boolean).join('　'))}</small><small style="display:block;color:var(--sub)">もらった日 ${eEsc(c.もらった日)}　${eEsc(c.営業担当)}</small></div>`).join('')+'</div></section>';
 }
 let nDay='';
 async function eNippo(day){
@@ -684,11 +715,51 @@ function eNippoMove(n){const d=new Date(nDay+'T00:00:00Z');d.setUTCDate(d.getUTC
   const k=q.get('k'); if(k){ setVal('合言葉',k); try{localStorage.setItem('shinki_code',k);}catch(e){} }
   setTimeout(()=>{ eTab('e'); eNippo(); },300);
 })();
+// ----- 現在地のまわりの会社を地図の情報から出す -----
+function eHere(){return new Promise((ok,ng)=>{ if(!navigator.geolocation) return ng(new Error('このスマホでは現在地が使えません')); navigator.geolocation.getCurrentPosition(p=>ok(p.coords),e=>ng(new Error(e.code===1?'位置情報の使用を「許可」してください':'現在地がわかりませんでした')),{enableHighAccuracy:true,timeout:15000,maximumAge:30000}); });}
+let nearHits=[];
+function nearList(list){ return list.length?list.map((h,i)=>`<div class="row" onclick="eNearPick(${i})"><div><b>${eEsc(h.name)}</b><small style="display:block;color:var(--sub)">${eEsc([h.address,h.tel].filter(Boolean).join('　'))}</small></div><small style="color:var(--sub);white-space:nowrap">${h.d}m</small></div>`).join(''):'<div class="hint">近くに会社が見つかりませんでした。名刺を撮るか、名刺なしで登録してください。</div>'; }
+async function eNear(){
+  document.getElementById('eFoot').hidden=true;
+  const m=document.getElementById('eigyo');
+  m.innerHTML=`<button class="big sub" onclick="eHome()">← 戻る</button><section><h2>現在地から会社を選ぶ<small>近い順</small></h2><div class="body" id="nearRes"><div class="hint">現在地を調べています…</div></div></section>`;
+  try{
+    const c=await eHere(); document.getElementById('nearRes').innerHTML='<div class="hint">まわりの会社を探しています…</div>';
+    nearHits=await eRun('mapNearby',c.latitude,c.longitude);
+    document.getElementById('nearRes').innerHTML=nearList(nearHits)+'<div class="hint" style="margin-top:8px">地図の情報（Googleマップ）から出しています。出ない会社は、名刺を撮るか名刺なしで登録してください。</div>';
+  }catch(e){ document.getElementById('nearRes').innerHTML='<div class="hint">'+eEsc(e.message||e)+'</div>'; }
+  window.scrollTo(0,0);
+}
+async function eNearPick(i){
+  const h=nearHits[i]; toast('住所を調べています…');
+  let p={}; try{ p=await eRun('mapPlace',h.lat,h.lng,h.name); }catch(e){}
+  E.card=null; E.img='';
+  eEdit(null,{会社名:h.name,郵便番号:h.zip||p.zip||'',住所:h.address||p.address||'',電話:h.tel||''},null,null,null);
+  toast('「'+h.name+'」を入れました。まちがいを直してから登録してください');
+}
+// 新規申請の「地図で探す」にも「現在地」ボタンをつける
+(function(){
+  const q=document.getElementById('mapQ'); if(!q) return;
+  const b=document.createElement('button'); b.type='button'; b.textContent='📍 現在地'; b.onclick=mapHere; q.parentNode.appendChild(b);
+})();
+async function mapHere(){
+  const box=document.getElementById('mapRes'); box.innerHTML='<div class="hint" style="padding:4px">現在地を調べています…</div>';
+  try{
+    const c=await eHere(); box.innerHTML='<div class="hint" style="padding:4px">まわりの会社を探しています…</div>';
+    nearHits=await eRun('mapNearby',c.latitude,c.longitude);
+    box.innerHTML=nearHits.length?nearHits.map((h,i)=>`<div class="mres"><b>${eEsc(h.name)}</b><small>${h.d}m　${eEsc(h.address||'')}</small><button onclick="mapHerePick(${i})">これにする</button></div>`).join(''):'<div class="hint" style="padding:4px">近くに会社が見つかりませんでした。会社名で探してください。</div>';
+  }catch(e){ box.innerHTML='<div class="hint" style="padding:4px">'+eEsc(e.message||e)+'</div>'; }
+}
+async function mapHerePick(i){
+  const h=nearHits[i]; toast('住所を調べています…');
+  try{ const p=await eRun('mapPlace',h.lat,h.lng,h.name); mapHits=[{name:h.name,address:h.address||p.address,zip:h.zip||p.zip,lat:h.lat,lng:h.lng,url:p.url,img:p.img}]; if(h.tel&&!getVal('TEL')) setVal('TEL',h.tel); pickMap(0); }
+  catch(e){ toast('住所を調べられませんでした：'+(e.message||e)); }
+}
 async function eOpenCard(mid){
   toast('名刺を開いています…');
   try{
     const r=await eRun('eigyoCardGet',eCode(),mid);
-    E.second=false; E.img=r.imageUrl; E.card={front:r.front,back:r.back||'',frontId:r.frontId,backId:r.backId||'',meishiId:r.meishiId}; E.fData=r.frontData; E.bData=r.backData||'';
+    E.second=false; E.img=r.imageUrl; E.card={front:r.front,back:r.back||'',frontId:r.frontId,backId:r.backId||'',meishiId:r.meishiId,frontRot:r.frontRot,backRot:r.backRot}; E.fData=r.frontData; E.bData=r.backData||'';
     eEdit(null,r.fields,r.frontData,null,r.backData||'');
     toast('まちがいを直してから登録してください');
   }catch(e){toast(e.message||e);}
@@ -713,7 +784,7 @@ function eEdit(company,fields,img,records,back,cards){
   const today=new Date(Date.now()+9*3600e3).toISOString().slice(0,10);
   m.innerHTML=
    `<section><h2>${company?eEsc(company.会社名):'会社の情報'}<small>${company?eEsc(company.状態):'名刺の読み取り結果を確かめてください'}</small></h2><div class="body">
-     <div id="eCard">${img?`<img class="card" src="${img}">`:''}${back?`<img class="card" src="${back}">`:''}</div>
+     <div id="eCard">${img?eImg(img,E.card&&E.card.frontId,E.card&&E.card.frontRot):''} ${back?eImg(back,E.card&&E.card.backId,E.card&&E.card.backRot):''}</div>
      ${company?`<button class="big sub" onclick="eShoot(true)">&#x1F4F7; 名刺をもう1枚撮る</button>`:''}
      ${CF.map(([k,t])=>eField(k,t,v[k]||'')).join('')}
      <div id="eDup"></div><div id="eArea"></div>
