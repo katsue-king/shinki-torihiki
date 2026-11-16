@@ -62,6 +62,9 @@
   .act{display:flex;gap:8px;padding:12px 14px;border-top:1px solid var(--line);flex-wrap:wrap}
   .act a{align-self:center;color:var(--acc)}
   .act .grow{flex:1}
+  .addr{display:flex;align-items:center;gap:10px;margin:0 14px 10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:15px}
+  .addr span{flex:1}
+  .mapbtn{flex:none;display:inline-block;padding:8px 12px;border-radius:8px;background:#1a73e8;color:#fff!important;text-decoration:none;font-size:15px;font-weight:bold;white-space:nowrap}
   .empty{text-align:center;color:var(--sub);padding:30px}
   h3{font-size:14px;color:var(--sub);margin:20px 4px 4px}
   .toast{position:fixed;left:50%;top:70px;transform:translateX(-50%);background:#333;color:#fff;padding:10px 16px;border-radius:8px;font-size:14px;display:none;z-index:9;white-space:pre-line;max-width:90%}
@@ -111,6 +114,9 @@ function stepsHTML(st){
   return '<div class="steps">'+STEPS.map((x,j)=>`<span class="${j<i?'done':j===i?'on':''}">${j<i?'✓ ':''}${x[1]}</span>`).join('')+'</div>';
 }
 function tag(r){const st=r['登録状況'];return r._mine?'<span class="tag t-wait">あなたの番</span>':st==='差し戻し'?'<span class="tag t-ng">差し戻し</span>':st==='登録済'?'<span class="tag t-ok">登録済</span>':'<span class="tag">'+esc(st)+'</span>';}
+function mapUrl(q){return 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(q);}
+function addrHTML(r){const a=String(r['納品先住所']||'').trim(), q=a||String(r['得意先名']||'').trim();if(!q)return '';
+  return `<div class="addr"><span>📍 ${esc(a||'住所の入力なし')}${r['車両停車位置・地図メモ']?'<br><small>停車位置：'+esc(r['車両停車位置・地図メモ'])+'</small>':''}</span><a class="mapbtn" href="${mapUrl(q)}" target="_blank" rel="noopener">🗺 地図で見る</a></div>`;}
 function card(r){
   const st=r['登録状況'], f=FLOW[st], mine=!!r._mine, no=esc(r['受付番号']);
   const sim=String(r['特別食システム照合']||''), alerts=[];
@@ -128,8 +134,9 @@ function card(r){
     <div><label>事務所メモ</label><input id="mm_${no}" value="${esc(r['事務所メモ']||'')}"></div></div>`:'';
   return `<div class="card"><div class="hd"><div><b>${esc(r['得意先名'])}</b><small>${no}・${esc(r['エリア']||'エリア未定')}・${esc(r['申請者'])}・開始 ${esc(r['取引開始日']||'-')}</small></div>${tag(r)}</div>
   ${stepsHTML(st)}
+  ${addrHTML(r)}
   ${alerts.map(a=>`<div class="alert">${esc(a)}</div>`).join('')}
-  <details><summary>入力内容を見る</summary><table>${SHOW.filter(k=>r[k]).map(k=>`<tr><td>${esc(k)}</td><td>${esc(r[k])}</td></tr>`).join('')}${hist?`<tr><td>経過</td><td>${esc(hist)}</td></tr>`:''}</table></details>
+  <details><summary>入力内容を見る</summary><table>${SHOW.filter(k=>r[k]).map(k=>`<tr><td>${esc(k)}</td><td>${esc(r[k])}${k==='納品先住所'?` <a class="mapbtn" href="${mapUrl(r[k])}" target="_blank" rel="noopener">🗺 地図</a>`:''}</td></tr>`).join('')}${hist?`<tr><td>経過</td><td>${esc(hist)}</td></tr>`:''}</table></details>
   ${office}
   <div class="act">${r['申請書']?`<button onclick="openPdf('${no}')">申請書を見る</button>`:''}<span class="grow"></span>
   ${mine&&f?`${st!=='デリ登録待ち'?`<button class="ng" onclick="openRej('${no}')">差し戻す</button>`:''}<button class="main" onclick="approve('${no}','${esc(st)}')">${esc(st==='営業責任者確認待ち'&&r['規定外の弁当']?'弁当「'+r['規定外の弁当']+'」を認めてエリア長へ回す':st==='エリア長承認待ち'&&r['配送条件']?'配送条件を認めて承認する':f.btn)}</button>`:''}</div></div>`;
