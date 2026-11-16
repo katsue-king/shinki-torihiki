@@ -801,11 +801,13 @@ function eEdit(company,fields,img,records,back,cards){
   document.getElementById('eFoot').hidden=false;
   const nameEl=document.getElementById('e_会社名');
   if(!company){ nameEl.addEventListener('change',eDup); if(v.会社名) eDup(); }
+  if(!company&&v.会社名候補){ const alt=String(v.会社名候補).split('／').filter(x=>x&&x!==v.会社名); if(alt.length){ const d=document.createElement('div'); d.className='hint'; d.innerHTML='名刺に会社名がほかにもあります。ちがうときは押してください：'+alt.map(x=>`<button type="button" class="sub" style="margin:4px 6px 0 0;padding:6px 10px" onclick="eAltName(this)">${eEsc(x)}</button>`).join(''); nameEl.insertAdjacentElement('afterend',d); } }
   const adEl=document.getElementById('e_住所');
   const eAreaCheck=()=>{const a=eVal('住所');if(a) areaRun('checkAreaByAddress',[eCode(),a],document.getElementById('eArea'));};
   if(adEl){ adEl.addEventListener('change',eAreaCheck); if(v.住所) eAreaCheck(); }
   window.scrollTo(0,0);
 }
+function eAltName(b){ const el=document.getElementById('e_会社名'); const cur=el.value; el.value=b.textContent; b.textContent=cur; eDup(); }
 async function eDup(){
   const n=eVal('会社名'), box=document.getElementById('eDup'); if(!box) return;
   box.innerHTML='';
