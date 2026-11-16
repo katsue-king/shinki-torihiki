@@ -571,11 +571,17 @@ whoAmI(); loadDraft(); if(getVal('GoogleマップURL'))showMapView({url:getVal('
   document.querySelector('header').after(nav);
   nav.addEventListener('click',ev=>{const b=ev.target.closest('button');if(b)eTab(b.dataset.t);});
   const h=document.createElement('input');h.type='hidden';h.name='営業先ID';document.getElementById('form').appendChild(h);
+  // 記入例（TMT神津 三田工場）へのリンク
+  const sl=document.createElement('a'); sl.id='sampleLink'; sl.href='sample.html';
+  sl.style.cssText='display:block;margin:10px 12px 0;padding:10px 12px;border:1.5px solid var(--acc);border-radius:10px;background:#fff;color:var(--acc);text-decoration:none;font-weight:700;text-align:center';
+  sl.textContent='\u{1F4C4} 記入例を見る（TMT神津 三田工場）';
+  document.getElementById('form').before(sl);
 })();
 function eTab(t){
   document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
   const e=t==='e';
   document.getElementById('form').hidden=e; document.getElementById('foot').style.display=e?'none':'';
+  const slk=document.getElementById('sampleLink'); if(slk) slk.style.display=e?'none':'block';
   document.getElementById('eigyo').hidden=!e; document.getElementById('eFoot').hidden=true;
   document.querySelector('header h1').textContent=e?'新規営業':'新規取引申請書';
   if(e) eHome();
